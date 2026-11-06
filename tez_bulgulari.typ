@@ -5,7 +5,7 @@
 #set text(font: "New Computer Modern", size: 10.5pt, lang: "tr")
 
 = Çok-Bantlı Fırsatçı İyonosferik Algılama ve Mikro-Doppler Kestirim Bulguları
-*Operatör:* Ahmet Eren Çokcoşkun (`TA7CAE`) | *Konum:* Kayseri (`KM78`, $38.72^circle "N", 35.48^circle "E"$)
+*Operatör:* Ahmet Eren Çokcoşkun (`TA7CAE`) | *Konum:* Kayseri / Talas (`KM78`, $38.72°N, 35.48°E$)
 
 == 1. Appleton-Hartree ve Sapmasız Yaklaşım Zayıflama ($alpha$) Hata Bütçesi
 Kayseri jeomanyetik alanı ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) altında elde edilen iki yönlü sönümleme karşılaştırması:
@@ -31,8 +31,8 @@ Kayseri jeomanyetik alanı ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) a
   columns: (auto, auto, auto, auto, auto, auto),
   align: center,
   [*Çağrı İşareti*], [*Grid*], [*Menzil*], [*SNR*], [*İyonosferik Sürüklenme*], [*Katman İvmesi $a_z$*],
-  [DP0GVN], [IB59], [13420 km], [-21.0 dB], [-0.85 Hz/dk], [+0.486 m/s²],
-  [ZL1SIX], [RF73], [16890 km], [-25.0 dB], [+1.11 Hz/dk], [-0.639 m/s²],
-  [K3LR], [EN91], [8940 km], [-14.0 dB], [+0.32 Hz/dk], [-0.182 m/s²],
-  [JA1ABC], [PM95], [8720 km], [-18.5 dB], [-0.59 Hz/dk], [+0.340 m/s²],
+  [DP0GVN], [IB59], [13420 km], [-21.0 dB], [-0.83 Hz/dk], [+0.479 m/s²],
+  [ZL1SIX], [RF73], [16890 km], [-25.0 dB], [+1.15 Hz/dk], [-0.662 m/s²],
+  [K3LR], [EN91], [8940 km], [-14.0 dB], [+0.30 Hz/dk], [-0.173 m/s²],
+  [JA1ABC], [PM95], [8720 km], [-18.5 dB], [-0.64 Hz/dk], [+0.369 m/s²],
 )

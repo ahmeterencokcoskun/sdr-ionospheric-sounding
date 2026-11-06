@@ -8,7 +8,8 @@ from typing import Dict, List, Tuple
 import numpy as np
 from scipy import signal
 from scipy.special import erfc
-from watterson_simulator import COSTAS_ARRAY
+from iono_sense.simulation.watterson import COSTAS_ARRAY
+
 
 
 class IonosphericDSPCore:

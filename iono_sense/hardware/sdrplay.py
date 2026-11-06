@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List
 import numpy as np
-from watterson_simulator import WattersonChannelSimulator
+from iono_sense.simulation.watterson import WattersonChannelSimulator
+
 
 
 BAND_HOPPING_SCHEDULE = [

@@ -38,7 +38,7 @@ jobs:
 
     - name: Run Ionospheric Physics & DSP Simulation Pipeline
       run: |
-        pytest -v test_ionosphere.py
+        pytest -v tests/
         python main.py
         test -f iono_sense_dashboard.png
         test -f iono_sense_dashboard.pdf

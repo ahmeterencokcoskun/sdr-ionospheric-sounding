@@ -77,16 +77,28 @@ f_d(t) = \frac{1}{2\pi} \frac{d}{dt}\left[\mathrm{unwrap}\left(\arctan\frac{Q(t)
 
 ```text
 sdr-ionospheric-sounding/
-├── plasma_physics.py          # Chapman Ne(h), Appleton-Hartree (O/X-Mode), Sen-Wyller ve Ray-Tracing çözücüsü
-├── watterson_simulator.py     # ITU-R F.1487 Watterson çok-yollu kanal ve 8-GFSK FT8 / LDPC(174,91) I/Q üreticisi
-├── dsp_core.py                # FIR DDC kanal izolasyonu, Costas 2B uyumlu filtre, faz açma ve BER analizörü
-├── sdr_hardware.py            # SoapySDR (SDRplay RSPdx) donanım soyutlama katmanı, bant atlama ve SQLite kaydedici
-├── main.py                    # Ana simülasyon/sondaj çalıştırıcısı, 6-panelli çizici ve Typst/LaTeX rapor üreticisi
-├── requirements.txt           # Python bilimsel hesaplama bağımlılıkları (NumPy, SciPy, Matplotlib)
-├── iono_sense_dashboard.png   # Üretilen 6-panelli yüksek çözünürlüklü analiz figürü (PNG)
-├── iono_sense_dashboard.pdf   # Vektörel yayın kalitesinde analiz figürü (PDF)
-├── tez_bulgulari.typ          # Otomatik üretilen Typst akademik bulgular raporu
-└── tez_bulgulari.tex          # Otomatik üretilen LaTeX (IEEE SİU / Bitirme Tezi) tablosu
+├── iono_sense/                  # Ana Python Paketi (Modüler & Nesne Yönelimli)
+│   ├── physics/                 # Plazma Fiziği (Chapman, Appleton-Hartree, Sen-Wyller)
+│   │   └── plasma_engine.py     # IonosphericPlasmaEngine
+│   ├── simulation/              # Kanal ve Radar Simülatörleri
+│   │   ├── watterson.py         # WattersonChannelSimulator (FT8 / WSPR I/Q)
+│   │   └── fmcw_sounder.py      # FMCWIonosondeSimulator (Chirp İyonosond)
+│   ├── dsp/                     # Sayısal Sinyal İşleme (DSP)
+│   │   └── core.py              # IonosphericDSPCore (Costas, DDC, Mikro-Doppler, WSPR Drift)
+│   ├── hardware/                # Donanım ve Telemetri
+│   │   └── sdrplay.py           # RSPdxReceiverController (SoapySDR & SQLite)
+│   ├── reporting/               # Çizim ve Raporlama
+│   │   ├── dashboard.py         # AcademicDashboardPlotter (6-Panelli Figür)
+│   │   └── document_exporter.py # AcademicReportExporter (Typst & LaTeX)
+│   └── pipeline.py              # IonoSensePipeline (Uçtan Uca Orkestratör Sınıfı)
+├── tests/                       # Pytest Birim Test Süiti
+│   └── test_pipeline.py         # Modüler Entegrasyon ve Doğrulama Testleri
+├── main.py                      # Hafif Orkestratör Yürütücü
+├── requirements.txt             # Bilimsel Hesaplama Bağımlılıkları
+├── iono_sense_dashboard.png     # Üretilen 6-Panelli Yüksek Çözünürlüklü Figür
+├── iono_sense_dashboard.pdf     # Vektörel Akademik Figür
+├── tez_bulgulari.typ            # Otomatik Üretilen Typst Akademik Raporu
+└── tez_bulgulari.tex            # Otomatik Üretilen LaTeX (IEEE SİU / Tez) Tablosu
 ```
 
 ---
