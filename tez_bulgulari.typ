@@ -31,8 +31,8 @@ Kayseri jeomanyetik alanı ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) a
   columns: (auto, auto, auto, auto, auto, auto),
   align: center,
   [*Çağrı İşareti*], [*Grid*], [*Menzil*], [*SNR*], [*İyonosferik Sürüklenme*], [*Katman İvmesi $a_z$*],
-  [DP0GVN], [IB59], [13420 km], [-21.0 dB], [-0.89 Hz/dk], [+0.511 m/s²],
-  [ZL1SIX], [RF73], [16890 km], [-25.0 dB], [+1.19 Hz/dk], [-0.683 m/s²],
-  [K3LR], [EN91], [8940 km], [-14.0 dB], [+0.36 Hz/dk], [-0.208 m/s²],
-  [JA1ABC], [PM95], [8720 km], [-18.5 dB], [-0.72 Hz/dk], [+0.414 m/s²],
+  [DP0GVN], [IB59], [13420 km], [-21.0 dB], [-0.80 Hz/dk], [+0.461 m/s²],
+  [ZL1SIX], [RF73], [16890 km], [-25.0 dB], [+1.06 Hz/dk], [-0.608 m/s²],
+  [K3LR], [EN91], [8940 km], [-14.0 dB], [+0.34 Hz/dk], [-0.197 m/s²],
+  [JA1ABC], [PM95], [8720 km], [-18.5 dB], [-0.66 Hz/dk], [+0.381 m/s²],
 )

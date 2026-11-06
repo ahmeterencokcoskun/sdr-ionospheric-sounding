@@ -11,7 +11,7 @@ from iono_sense.physics.plasma_engine import IonosphericPlasmaEngine
 from iono_sense.simulation.watterson import WattersonChannelSimulator
 from iono_sense.simulation.fmcw_sounder import FMCWIonosondeSimulator
 from iono_sense.dsp.core import IonosphericDSPCore
-from iono_sense.hardware.sdrplay import RSPdxReceiverController
+from iono_sense.hardware.dummy_hardware import DummyLoadHardware
 from iono_sense.reporting.dashboard import AcademicDashboardPlotter
 from iono_sense.reporting.document_exporter import AcademicReportExporter
 
@@ -23,7 +23,7 @@ class IonoSensePipeline:
         self.fs = fs
         self.plasma_day = IonosphericPlasmaEngine(is_daytime=True)
         self.plasma_night = IonosphericPlasmaEngine(is_daytime=False)
-        self.sdr_controller = RSPdxReceiverController(fs=self.fs)
+        self.sdr_controller = DummyLoadHardware(fs=self.fs)
         self.dsp_core = IonosphericDSPCore(fs=self.fs)
         self.watterson_sim = WattersonChannelSimulator(fs=self.fs)
         self.fmcw_sim = FMCWIonosondeSimulator()

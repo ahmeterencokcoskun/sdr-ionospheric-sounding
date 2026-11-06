@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Modül 4: SDRplay RSPdx (SoapySDR) Donanım Soyutlama Katmanı,
-Zaman Bölüşümlü Bant Atlama (Band-Hopping) ve Uzay Havası / SQLite Telemetri Kaydedici.
+Modül 4: Gerçek olmayan Dummy Load ile Ölcüm Yapıldığınnın Varsayıldığı Donanım Soyutlama Katmanı,
+Zaman Bölüşümlü Bant Atlama (Band-Hopping) ve Uzay Havası / SQLite Telemetri Kaydedici. 
 """
 
 import sqlite3
@@ -21,13 +21,14 @@ BAND_HOPPING_SCHEDULE = [
 ]
 
 
-class RSPdxReceiverController:
+
+class DummyLoadHardwareController:
     """
-    SoapySDR yüklüyse ve RSPdx takılıysa doğrudan 14-bit I/Q akışı açar;
-    aksi halde otomatik olarak Watterson Sentetik RF Kanal Üreticisine geçer.
+    Gerçek olmayan Dummy Load ile Ölcüm Yapıldığınnın Varsayıldığı Donanım Soyutlama Katmanı.
+    Zaman Bölüşümlü Bant Atlama (Band-Hopping) ve Uzay Havası / SQLite Telemetri Kaydedici.
     """
 
-    def __init__(self, fs: float = 12000.0, db_path: str = "iono_telemetry_ta7cae.db"):
+    def __init__(self, fs: float = 100000.0, db_path: str = "iono_telemetry_ta7cae.db"):
         self.fs = fs
         self.db_path = Path(db_path)
         self.simulator = WattersonChannelSimulator(fs=fs)
