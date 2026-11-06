@@ -147,9 +147,20 @@ class FMCWIonosondeSimulator:
                         if bin_idx - 1 >= 0:
                             ionogram_power[bin_idx - 1, f_idx] += 0.6 * att_factor_X
 
-        # Sayısal gürültü tabanı (AWGN benzeri radyo paraziti)
-        noise = 0.03 * np.random.rand(n_height_bins, n_freq_steps)
-        ionogram_power += noise
+        # Doğrudan Spektral FFT Tabanlı Karmaşık AWGN (Additive White Gaussian Noise)
+        # Radar alıcısının zaman domenindeki karmaşık Gauss gürültüsünün menzil/gecikme FFT çıktısı:
+        # Zaman domeninde w(t) ~ CN(0, sigma^2) -> FFT[w(t)] spektral yoğunlukta Chi-kare (k=2) / Rayleigh güç tabanı üretir
+        sigma_noise = 0.04
+        time_awgn = (
+            np.random.standard_normal((n_height_bins, n_freq_steps))
+            + 1j * np.random.standard_normal((n_height_bins, n_freq_steps))
+        ) * (sigma_noise / np.sqrt(2.0))
+
+        # Range-FFT dönüşümü ve güç spektral yoğunluğu (PSD)
+        fft_noise = np.fft.fft(time_awgn, axis=0)
+        noise_power = (np.abs(fft_noise) ** 2) / n_height_bins
+
+        ionogram_power += noise_power
 
         # Logaritmik dB normalize güç
         max_p = np.max(ionogram_power)
