@@ -12,9 +12,10 @@ import numpy as np
 from plasma_physics import IonosphericPlasmaEngine
 from dsp_core import IonosphericDSPCore
 from sdr_hardware import RSPdxReceiverController
+from watterson_simulator import WattersonChannelSimulator
 
 
-def export_academic_reports(plasma_table: list, station_metrics: list, tcxo_est: float) -> None:
+def export_academic_reports(plasma_table: list, station_metrics: list, tcxo_est: float, wspr_metrics: list = None) -> None:
     """Elde edilen bulguları Typst (.typ) ve LaTeX (.tex) formatında diske yazar."""
     # 1. Typst Raporu
     typst_rows = "\n".join(
@@ -43,6 +44,20 @@ def export_academic_reports(plasma_table: list, station_metrics: list, tcxo_est:
         "== 2. Ortak-Mod TCXO Kalibrasyonu ve Alt-Paketsel Mikro-Doppler\n"
         f"- *Kestirilen RSPdx TCXO Ortak-Mod Kayması:* `{tcxo_est:+.3f} Hz` (Gerçek: `+1.350 Hz`)\n"
     )
+    if wspr_metrics:
+        typst_content += (
+            "\n== 3. WSPR (4-FSK) İyonosferik Frekans Sürüklenmesi (Drift Rate) ve Katman İvmesi\n"
+            "#table(\n"
+            "  columns: (auto, auto, auto, auto, auto, auto),\n"
+            "  align: center,\n"
+            "  [*Çağrı İşareti*], [*Grid*], [*Menzil*], [*SNR*], [*İyonosferik Sürüklenme*], [*Katman İvmesi $a_z$*],\n"
+        )
+        for wm in wspr_metrics:
+            typst_content += (
+                f"  [{wm['callsign']}], [{wm['grid']}], [{wm['distance_km']:.0f} km], "
+                f"[{wm['snr_db']:+.1f} dB], [{wm['net_iono_drift_hz_min']:+.2f} Hz/dk], [{wm['layer_accel_mps2']:+.3f} m/s²],\n"
+            )
+        typst_content += ")\n"
     with open("tez_bulgulari.typ", "w", encoding="utf-8") as f:
         f.write(typst_content)
 
@@ -133,7 +148,29 @@ def main() -> None:
             f"{st_m['pre_fec_ber']:.4f} ({st_m['bit_errors']}/174)"
         )
 
-    # 3. 6 Panelli Akademik Dashboard Çizimi
+    # 3. WSPR 2-Dakikalık Slot ve İyonosferik Sürüklenme (Drift Rate) Analizi
+    sim_channel = WattersonChannelSimulator(fs=12000.0)
+    wspr_slot = sim_channel.simulate_wspr_slot(band_mhz=14.0956, tcxo_drift_slope_hz_min=0.45)
+    est_drift_slope, wspr_results = dsp.analyze_wspr_signals(wspr_slot, f_carrier_mhz=14.0956)
+
+    print(
+        f"\n[3] 14.0956 MHz WSPR (4-FSK) ÇÖZÜMLEME VE İYONOSFERİK SÜRÜKLENME (DRIFT) ANALİZİ:\n"
+        f"    Gerçek TCXO Sürüklenme Eğimi: +{wspr_slot['tcxo_drift_slope_hz_min']:.3f} Hz/dk  -->  "
+        f"Kestirilen TCXO Eğimi: +{est_drift_slope:.3f} Hz/dk"
+    )
+    print(
+        f"{'Çağrı İş.':<10} | {'Menzil':<9} | {'SNR':<8} | {'Ölçülen Drift':<15} | "
+        f"{'Net İono Drift':<16} | {'Katman İvmesi az'}"
+    )
+    print("-" * 92)
+    for wm in wspr_results:
+        print(
+            f"{wm['callsign']:<10} | {wm['distance_km']:>6.0f} km | "
+            f"{wm['snr_db']:>+5.1f} dB | {wm['meas_drift_hz_min']:>+11.2f} Hz/dk | "
+            f"{wm['net_iono_drift_hz_min']:>+12.2f} Hz/dk | {wm['layer_accel_mps2']:>+13.4f} m/s²"
+        )
+
+    # 4. 6 Panelli Akademik Dashboard Çizimi
     plt.style.use("dark_background")
     fig, axes = plt.subplots(2, 3, figsize=(18, 10.5), dpi=160)
     fig.suptitle(
@@ -235,7 +272,7 @@ def main() -> None:
     plt.tight_layout(rect=[0, 0.01, 1, 0.94])
     plt.savefig("iono_sense_dashboard.png", dpi=180)
     plt.savefig("iono_sense_dashboard.pdf")
-    export_academic_reports(plasma_results, calibrated_stations, tcxo_est_hz)
+    export_academic_reports(plasma_results, calibrated_stations, tcxo_est_hz, wspr_results)
 
     print("\n" + "=" * 92)
     print(" [OK] ÇIKTILAR BAŞARIYLA ÜRETİLDİ:")
