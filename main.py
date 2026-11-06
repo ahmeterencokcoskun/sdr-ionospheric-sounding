@@ -36,12 +36,19 @@ def parse_arguments() -> argparse.Namespace:
         default=42,
         help="Benchmark modunda kullanılacak deterministik rastgele tohum (Varsayılan: 42)",
     )
+    parser.add_argument(
+        "--iq-file",
+        type=str,
+        default=None,
+        help="Laboratuvar/saha SDR ham I/Q kayıt dosyası (.wav veya binary cf32)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_arguments()
-    pipeline = IonoSensePipeline(mode=args.mode, fs=12000.0, seed=args.seed)
+    pipeline = IonoSensePipeline(mode=args.mode, fs=12000.0, seed=args.seed, iq_file=args.iq_file)
+
     meta = pipeline.get_execution_metadata()
 
     print("=" * 96)
@@ -122,11 +129,25 @@ def main() -> None:
         f"foF2 = {crit['foF2_mhz']:.1f} MHz | fxF2 = {crit['fxF2_mhz']:.1f} MHz"
     )
 
-    # 5. Çıktıları Üretme
+    # 5. Haselgrove 2B Işın İzleme (Ray-Tracing) Yelpazesi
+    ray_fan = pipeline.run_ray_tracing_fan(freq_mhz=14.074)
+    print(
+        f"\n[5] 2B HASELGROVE IŞIN İZLEME (RAY-TRACING) HESABI (14.074 MHz):\n"
+        f"{'Kalkış Açısı Δ':<16} | {'Durum':<10} | {'Apex İrtifa':<13} | {'Yer Menzili'}"
+    )
+    print("-" * 96)
+    for ray in ray_fan:
+        status_str = "YANSIDI" if ray.reflected else "UZAYA KAÇTI"
+        dist_str = f"{ray.ground_hit_km:>6.1f} km" if ray.reflected else "  ---   "
+        print(f"Δ = {ray.elevation_deg:>4.1f}°        | {status_str:<10} | {ray.apex_height_km:>7.1f} km   | {dist_str}")
+
+    # 6. Çıktıları Üretme
     pipeline.generate_all_artifacts(
         plasma_results=plasma_results,
         ft8_analysis=ft8_res,
         wspr_analysis=wspr_res,
+        ionogram_data=fmcw_res,
+        ray_fan=ray_fan,
     )
 
     print("\n" + "=" * 96)

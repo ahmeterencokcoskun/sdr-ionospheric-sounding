@@ -24,15 +24,15 @@ Kayseri jeomanyetik alanı ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) a
 )
 
 == 2. Ortak-Mod TCXO Kalibrasyonu ve Alt-Paketsel Mikro-Doppler
-- *Kestirilen RSPdx TCXO Ortak-Mod Kayması:* `+1.551 Hz` (Gerçek: `+1.350 Hz`)
+- *Kestirilen RSPdx TCXO Ortak-Mod Kayması:* `+1.129 Hz` (Gerçek: `+1.350 Hz`)
 
 == 3. WSPR (4-FSK) İyonosferik Frekans Sürüklenmesi (Drift Rate) ve Katman İvmesi
 #table(
   columns: (auto, auto, auto, auto, auto, auto),
   align: center,
   [*Çağrı İşareti*], [*Grid*], [*Menzil*], [*SNR*], [*İyonosferik Sürüklenme*], [*Katman İvmesi $a_z$*],
-  [SP9QSV], [RK38], [916 km], [+13.3 dB], [-0.09 Hz/dk], [+0.050 m/s²],
-  [JA8UNQ], [DD46], [971 km], [-0.3 dB], [+0.38 Hz/dk], [-0.216 m/s²],
-  [K7GCS], [IG03], [2310 km], [-2.7 dB], [-0.82 Hz/dk], [+0.473 m/s²],
-  [I4YOS], [ID32], [2102 km], [+12.6 dB], [+0.76 Hz/dk], [-0.433 m/s²],
+  [G1LWJ], [OL90], [981 km], [-3.7 dB], [+0.21 Hz/dk], [-0.121 m/s²],
+  [EA6HFA], [PL88], [2371 km], [+7.9 dB], [-0.29 Hz/dk], [+0.165 m/s²],
+  [EA0EUJ], [JG70], [1821 km], [+10.5 dB], [-0.65 Hz/dk], [+0.375 m/s²],
+  [K3CIH], [AG71], [1589 km], [+4.0 dB], [+1.18 Hz/dk], [-0.676 m/s²],
 )

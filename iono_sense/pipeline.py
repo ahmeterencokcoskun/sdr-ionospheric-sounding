@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 """
-Uçtan Uca İyonosferik Algılama ve DSP Orkestrasyon Hattı (Pipeline).
-Desteklenen Modlar:
-  - 'live'     : Gerçek zamanlı NOAA SWPC telemetrisi + Dinamik stokastik RF benzetimi
-  - 'sim'      : Tamamen rastgele stokastik uzay havası ve gökyüzü koşulları
-  - 'benchmark': Belirlenmiş sabit tohum (seed) ile deterministik tekrarlanabilir test modu
+Uçtan Uca İyonosferik Algılama ve DSP Orkestrasyon Hattı (Pipeline - v2).
+Haselgrove Ray-Tracer, FMCW İyonogram ve LDPC Kod Çözücü Entegre Edilmiş Mimari.
 """
 
 from typing import Dict, List, Optional
 import numpy as np
 
 from iono_sense.physics.plasma_engine import IonosphericPlasmaEngine
+from iono_sense.physics.ray_tracer import HaselgroveRayTracer
 from iono_sense.simulation.watterson import WattersonChannelSimulator
 from iono_sense.simulation.fmcw_sounder import FMCWIonosondeSimulator
 from iono_sense.dsp.core import IonosphericDSPCore
+from iono_sense.dsp.ldpc_decoder import FT8LDPCDecoder
 from iono_sense.hardware.dummy_hardware import DummyLoadHardware
+from iono_sense.hardware.file_playback import IQFilePlaybackHardware
 from iono_sense.reporting.dashboard import AcademicDashboardPlotter
 from iono_sense.reporting.document_exporter import AcademicReportExporter
 
@@ -22,16 +22,30 @@ from iono_sense.reporting.document_exporter import AcademicReportExporter
 class IonoSensePipeline:
     """Çok-Bantlı Fırsatçı İyonosferik Sondaj ve Analiz Hattı."""
 
-    def __init__(self, mode: str = "live", fs: float = 12000.0, seed: Optional[int] = None):
+    def __init__(
+        self,
+        mode: str = "live",
+        fs: float = 12000.0,
+        seed: Optional[int] = None,
+        iq_file: Optional[str] = None,
+    ):
         self.mode = mode.lower()
         self.fs = fs
         self.seed = seed if self.mode == "benchmark" else None
+        self.iq_file = iq_file
 
         # 1. Alt Sistemlerin Başlatılması
         self.plasma_day = IonosphericPlasmaEngine(is_daytime=True)
         self.plasma_night = IonosphericPlasmaEngine(is_daytime=False)
-        self.sdr_controller = DummyLoadHardware(fs=self.fs)
+        self.ray_tracer = HaselgroveRayTracer(plasma_engine=self.plasma_day)
+
+        if self.iq_file:
+            self.sdr_controller = IQFilePlaybackHardware(file_path=self.iq_file, fs=self.fs)
+        else:
+            self.sdr_controller = DummyLoadHardware(fs=self.fs)
+
         self.dsp_core = IonosphericDSPCore(fs=self.fs)
+        self.ldpc_decoder = FT8LDPCDecoder()
         self.watterson_sim = WattersonChannelSimulator(fs=self.fs, rng_seed=self.seed)
         self.fmcw_sim = FMCWIonosondeSimulator(plasma_engine=self.plasma_day)
         self.plotter = AcademicDashboardPlotter()
@@ -39,7 +53,15 @@ class IonoSensePipeline:
 
     def get_execution_metadata(self) -> Dict[str, str]:
         """Konsol ve raporlar için aktif veri kaynaklarını açıklar."""
-        if self.mode == "live":
+        if self.iq_file:
+            return {
+                "mode_title": "DOSYA TABANLI GERÇEK I/Q OYNATMA",
+                "weather_source": "CANLI / STATİK ENTEGRASYON",
+                "rf_hardware": f"I/Q FILE PLAYBACK ({self.iq_file})",
+                "signal_data": "LABORATUVAR / SAHA SDR KAYDI",
+                "ionogram_source": "FİZİKSEL MODEL (Breit-Tuve Grup İndisi + Range-FFT AWGN)",
+            }
+        elif self.mode == "live":
             return {
                 "mode_title": "CANLI / LIVE HİBRİT",
                 "weather_source": "GERÇEK ZAMANLI (NOAA SWPC API - services.swpc.noaa.gov)",
@@ -72,7 +94,7 @@ class IonoSensePipeline:
 
     def run_ft8_micro_doppler_analysis(self, freq_mhz: float = 14.074) -> Dict:
         """FT8 çerçevesini yakalar, TCXO ortak modunu kalibre eder ve mikro-Doppler çıkarır."""
-        if self.mode == "live":
+        if self.mode == "live" and hasattr(self.sdr_controller, "get_space_weather_snapshot"):
             sw_data = self.sdr_controller.get_space_weather_snapshot()
         elif self.mode == "sim":
             rng = np.random.default_rng()
@@ -85,7 +107,7 @@ class IonoSensePipeline:
                 "Solar_Wind_kms": float(rng.uniform(350.0, 520.0)),
                 "X_Ray_Flux_Wm2": 1.2e-6,
             }
-        else:  # benchmark
+        else:
             sw_data = {
                 "SFI": 124.0,
                 "SN": 109.0,
@@ -96,7 +118,6 @@ class IonoSensePipeline:
                 "X_Ray_Flux_Wm2": 1.0e-6,
             }
 
-        # RF tamponunu Watterson simülatöründen al
         frame_20m = self.watterson_sim.simulate_band_frame(band_mhz=freq_mhz)
 
         raw_metrics = [
@@ -104,7 +125,8 @@ class IonoSensePipeline:
             for gt in frame_20m["ground_truth"]
         ]
         tcxo_est_hz, calibrated_stations = self.dsp_core.calibrate_and_extract_doppler(raw_metrics)
-        self.sdr_controller.log_results(freq_mhz, calibrated_stations, sw_data)
+        if hasattr(self.sdr_controller, "log_results"):
+            self.sdr_controller.log_results(freq_mhz, calibrated_stations, sw_data)
 
         return {
             "sw_data": sw_data,
@@ -127,11 +149,17 @@ class IonoSensePipeline:
         """FMCW LFM Chirp iyonosond sanal irtifa h'(f) profilini üretir."""
         return self.fmcw_sim.synthesize_ionogram_profile()
 
+    def run_ray_tracing_fan(self, freq_mhz: float = 14.074) -> List:
+        """Haselgrove 2B diferansiyel ışın yelpazesini hesaplar."""
+        return self.ray_tracer.trace_multihop_fan(freq_mhz=freq_mhz, elevations=[7.0, 14.0, 21.0, 30.0])
+
     def generate_all_artifacts(
         self,
         plasma_results: List[Dict],
         ft8_analysis: Dict,
         wspr_analysis: Dict,
+        ionogram_data: Optional[Dict] = None,
+        ray_fan: Optional[List] = None,
         png_path: str = "iono_sense_dashboard.png",
         pdf_path: str = "iono_sense_dashboard.pdf",
         typst_path: str = "tez_bulgulari.typ",
@@ -146,6 +174,8 @@ class IonoSensePipeline:
             calibrated_stations=ft8_analysis["calibrated_stations"],
             dsp_core=self.dsp_core,
             sw_data=ft8_analysis["sw_data"],
+            ionogram_data=ionogram_data,
+            ray_fan=ray_fan,
             save_png=png_path,
             save_pdf=pdf_path,
         )
