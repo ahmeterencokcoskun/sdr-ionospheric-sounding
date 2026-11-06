@@ -1,0 +1,56 @@
+name: IONO-SENSE DSP & Physics CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-simulate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+
+    - name: Install scientific dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install flake8
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with flake8 (Syntax & Undefined Names Check)
+      run: |
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=12 --max-line-length=127 --statistics
+
+    - name: Run Ionospheric Physics & DSP Simulation Pipeline
+      run: |
+        python main.py
+        test -f iono_sense_dashboard.png
+        test -f iono_sense_dashboard.pdf
+        test -f tez_bulgulari.typ
+        test -f tez_bulgulari.tex
+
+    - name: Archive Generated Academic Artifacts (PDF, PNG, Typst, LaTeX)
+      if: matrix.python-version == '3.12'
+      uses: actions/upload-artifact@v4
+      with:
+        name: iono-sense-academic-outputs
+        path: |
+          iono_sense_dashboard.png
+          iono_sense_dashboard.pdf
+          tez_bulgulari.typ
+          tez_bulgulari.tex
