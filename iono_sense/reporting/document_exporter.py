@@ -4,7 +4,7 @@ Akademik Rapor Dışa Aktarıcı:
 Bulguları Typst (.typ) ve LaTeX (.tex) formatında standart IEEE/SİU formatında üretir.
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 
 class AcademicReportExporter:
@@ -31,6 +31,7 @@ class AcademicReportExporter:
         tcxo_est: float,
         wspr_metrics: Optional[List[Dict]] = None,
         filepath: str = "tez_bulgulari.typ",
+        inversion_result: Optional[Any] = None,
     ) -> None:
         """Typst akademik raporunu diske yazar."""
         typst_rows = "\n".join(
@@ -75,6 +76,52 @@ class AcademicReportExporter:
                 )
             content += ")\n"
 
+        if inversion_result is not None:
+            foF2 = float(getattr(inversion_result, "foF2_mhz", inversion_result.get("foF2_mhz", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            hmF2 = float(getattr(inversion_result, "hmF2_km", inversion_result.get("hmF2_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            NmF2 = float(getattr(inversion_result, "NmF2_m3", inversion_result.get("NmF2_m3", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            tec = float(getattr(inversion_result, "subpeak_tec_tecu", inversion_result.get("subpeak_tec_tecu", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            rms = float(getattr(inversion_result, "residual_rms_km", inversion_result.get("residual_rms_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            true_h = getattr(inversion_result, "true_heights_km", inversion_result.get("true_heights_km", None) if isinstance(inversion_result, dict) else None)
+            pf = getattr(inversion_result, "plasma_freqs_mhz", inversion_result.get("plasma_freqs_mhz", None) if isinstance(inversion_result, dict) else None)
+            ne = getattr(inversion_result, "electron_density_m3", inversion_result.get("electron_density_m3", None) if isinstance(inversion_result, dict) else None)
+
+            content += (
+                "\n== 4. Breit-Tuve Sanal İrtifadan Gerçek İrtifa Tersinimi (True-Height Inversion)\n"
+                "FMCW dikey iyonosond sanal irtifa verileri $h'(f)$, Breit-Tuve integral denklemine dayanmaktadır:\n"
+                "$ h'(f) = h_0 + integral_0^{h_r(f)} mu'(f, f_p(h)) dif h $\n\n"
+                "Bu Abel-tipi integral denklemi, Jackson (1969) parçalı doğrusal laminasyon matris çekirdeği "
+                "$M_(i k)$ ve Tikhonov 2. derece ayrık eğrilik regülarizasyon operatörü ($L$) kullanılarak tersinmiştir. "
+                "Elde edilen tepe parametreleri ve alt-iyonosferik toplam elektron içeriği aşağıda özetlenmiştir:\n\n"
+                "#table(\n"
+                "  columns: (auto, auto, auto, auto, auto),\n"
+                "  align: center,\n"
+                "  [*foF2 (Kritik Frekans)*], [*hmF2 (Tepe İrtifası)*], [*NmF2 (Elektron Yoğunluğu)*], [*Alt-Tepe TEC*], [*Kalıntı RMS*],\n"
+                f"  [{foF2:.3f} MHz], [{hmF2:.1f} km], [{NmF2:.3e} el/m³], [{tec:.2f} TECU], [{rms:.4f} km],\n"
+                ")\n"
+            )
+
+            if true_h is not None and pf is not None and len(true_h) > 0:
+                n_layers = len(true_h)
+                step = max(1, n_layers // 7)
+                sampled_indices = list(range(0, n_layers, step))
+                if (n_layers - 1) not in sampled_indices:
+                    sampled_indices.append(n_layers - 1)
+
+                layer_rows = "\n".join(
+                    f"  [{pf[idx]:.2f} MHz], [{true_h[idx]:.1f} km], [{(ne[idx] if ne is not None else 1.24e10*(pf[idx]**2)):.3e} el/m³],"
+                    for idx in sampled_indices
+                )
+                content += (
+                    "\n*Tersinim ile Kestirilen Katman Profili Örneklemleri:*\n"
+                    "#table(\n"
+                    "  columns: (auto, auto, auto),\n"
+                    "  align: center,\n"
+                    "  [*Plazma Frekansı $f_p$*], [*Gerçek İrtifa $h$*], [*Elektron Yoğunluğu $N_e$*],\n"
+                    f"{layer_rows}\n"
+                    ")\n"
+                )
+
         with open(filepath, "w", encoding="utf-8") as f:
             f.write(content)
 
@@ -82,6 +129,7 @@ class AcademicReportExporter:
         self,
         plasma_table: List[Dict],
         filepath: str = "tez_bulgulari.tex",
+        inversion_result: Optional[Any] = None,
     ) -> None:
         """IEEE SİU ve Tez formatında LaTeX tablosunu diske yazar."""
         latex_rows = "\n".join(
@@ -107,5 +155,34 @@ class AcademicReportExporter:
             r"\end{tabular}",
             r"\end{table}",
         ]
+
+        if inversion_result is not None:
+            foF2 = float(getattr(inversion_result, "foF2_mhz", inversion_result.get("foF2_mhz", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            hmF2 = float(getattr(inversion_result, "hmF2_km", inversion_result.get("hmF2_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            NmF2 = float(getattr(inversion_result, "NmF2_m3", inversion_result.get("NmF2_m3", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            tec = float(getattr(inversion_result, "subpeak_tec_tecu", inversion_result.get("subpeak_tec_tecu", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            rms = float(getattr(inversion_result, "residual_rms_km", inversion_result.get("residual_rms_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
+
+            inv_table_lines = [
+                "",
+                "% ============================================================================",
+                "% Gerçek İrtifa İyonogram Tersinimi (True-Height Inversion foF2, hmF2) Bulguları",
+                r"% Breit-Tuve Grubu Gecikmesi h'(f) = h_0 + \int_0^{h_r} \mu'(f, h) dh",
+                "% Jackson (1969) / Tikhonov Regularization",
+                "% ============================================================================",
+                r"\begin{table}[htbp]",
+                r"\centering",
+                r"\caption{Dikey FMCW İyonosond İyonogramından Sayısal Tersinim ile Kestirilen İyonosferik Tepe Parametreleri}",
+                r"\begin{tabular}{ccccc}",
+                r"\hline",
+                r"\textbf{$f_oF2$ (MHz)} & \textbf{$h_mF2$ (km)} & \textbf{$N_mF2$ ($\mathrm{m}^{-3}$)} & \textbf{$\mathrm{TEC}_{\mathrm{bottom}}$ (TECU)} & \textbf{Kalıntı RMS (km)} \\",
+                r"\hline",
+                f"{foF2:.3f} & {hmF2:.1f} & {NmF2:.3e} & {tec:.2f} & {rms:.4f} \\\\",
+                r"\hline",
+                r"\end{tabular}",
+                r"\end{table}",
+            ]
+            lines.extend(inv_table_lines)
+
         with open(filepath, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")

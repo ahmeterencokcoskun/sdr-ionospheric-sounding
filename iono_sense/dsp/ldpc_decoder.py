@@ -38,12 +38,14 @@ class FT8LDPCDecoder:
         8-GFSK ton enerjilerinden 3-bitlik Log-Likelihood Ratio (LLR) dizisi türetir.
         LLR = ln( P(bit=0) / P(bit=1) )
         """
+        # Sıfıra bölme koruması
+        safe_noise_var = max(noise_var, 1e-6)
         # tone_energies shape: [58, 8]
         n_syms = len(tone_energies)
         llrs = np.zeros((n_syms, 3), dtype=np.float64)
 
         for s in range(n_syms):
-            E = tone_energies[s] / noise_var
+            E = tone_energies[s] / safe_noise_var
             # Bit 0 (en anlamlı bit: tonlar 0..3 için '0', 4..7 için '1')
             p0_b0 = np.sum(np.exp(E[0:4] - np.max(E)))
             p1_b0 = np.sum(np.exp(E[4:8] - np.max(E)))
@@ -66,6 +68,7 @@ class FT8LDPCDecoder:
         Normalized Min-Sum iteratif kod çözücü.
         Döndürür: (tahmin_edilen_174_bit, basarili_mi, iterasyon_sayisi)
         """
+        assert len(input_llrs) == self.n_bits, f"Expected {self.n_bits} LLRs, got {len(input_llrs)}"
         L_var = np.copy(input_llrs)
         # Check-to-variable ve variable-to-check mesaj matrisleri
         M_cv = np.zeros((self.m_checks, self.n_bits), dtype=np.float64)
@@ -78,16 +81,16 @@ class FT8LDPCDecoder:
             # 1. Variable to Check adımı
             for m in range(self.m_checks):
                 vars_connected = check_edges[m]
-                # Min-sum güncellemesi
-                vals = [L_var[n] - M_cv[m, n] for n in vars_connected]
-                signs = np.sign(vals)
-                prod_signs = np.prod(signs)
+                # Min-sum güncellemesi (sıfır LLR silinmesi engellenir)
+                vals = np.array([L_var[n] - M_cv[m, n] for n in vars_connected])
+                signs = np.where(vals >= 0, 1.0, -1.0)
                 abs_vals = np.abs(vals)
 
                 for idx, n in enumerate(vars_connected):
                     other_abs = np.delete(abs_vals, idx)
-                    min_val = np.min(other_abs) if len(other_abs) > 0 else 0.0
-                    local_sign = prod_signs * signs[idx]
+                    min_val = float(np.min(other_abs)) if len(other_abs) > 0 else 0.0
+                    other_signs = np.delete(signs, idx)
+                    local_sign = float(np.prod(other_signs))
                     M_cv[m, n] = self.alpha * local_sign * min_val
 
             # 2. Check to Variable ve Toplam LLR güncellemesi
@@ -95,6 +98,8 @@ class FT8LDPCDecoder:
             for n in range(self.n_bits):
                 L_total[n] += np.sum(M_cv[var_edges[n], n])
 
+            # Sayısal taşmayı önlemek için LLR kırpması [-50, +50]
+            L_total = np.clip(L_total, -50.0, 50.0)
             L_var = L_total
             # Sert karar (Hard Decision): LLR < 0 -> 1, LLR >= 0 -> 0
             decoded_bits = (L_total < 0).astype(np.int32)

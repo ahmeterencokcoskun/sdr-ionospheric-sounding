@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 import numpy as np
 
+from iono_sense.dsp.ldpc_decoder import FT8LDPCDecoder
+
 
 COSTAS_ARRAY = np.array([3, 1, 4, 0, 6, 5, 2], dtype=np.int32)
 
@@ -50,13 +52,17 @@ class WattersonChannelSimulator:
         self.frame_sec = 15.0
         self.n_samples = int(self.fs * self.frame_sec)
         # Seed verilmezse işletim sistemi entropisi (None) kullanılarak her seferinde bambaşka veri üretilir
-        self.rng = np.random.default_rng(rng_seed)
+        self.rng = np.random.default_rng(abs(int(rng_seed)) if rng_seed is not None else None)
 
         # FT8 Parametreleri
         self.n_symbols = 79
         self.sym_dur = 0.16  # 6.25 Baud
         self.tone_spacing = 6.25  # Hz
         self.samples_per_sym = int(round(self.fs * self.sym_dur))  # 1920 örnek
+
+        # LDPC Kod Çözücü ve Sistemik Parite Üreteç Matrisi H_info [83 x 91]
+        self.ldpc_decoder = FT8LDPCDecoder()
+        self.H_info = self.ldpc_decoder.H[:, :self.ldpc_decoder.k_bits]
 
     def _generate_random_callsign(self) -> str:
         """Rastgele ITU standartlarına uygun amatör telsiz çağrı işareti üretir."""
@@ -109,10 +115,9 @@ class WattersonChannelSimulator:
         return stations
 
     def generate_ldpc_codeword(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Her seferinde tamamen rastgele 174-bit LDPC kod kelimesi ve 79 sembol üretir."""
+        """Sistemik LDPC(174,91) parite denetim matrisiyle uyumlu kod kelimesi üretir (H * c^T = 0)."""
         msg_bits = self.rng.integers(0, 2, size=91, dtype=np.int32)
-        H_gen = self.rng.integers(0, 2, size=(83, 91), dtype=np.int32)
-        parity_bits = (H_gen @ msg_bits) % 2
+        parity_bits = (self.H_info @ msg_bits) % 2
         codeword_174 = np.concatenate([msg_bits, parity_bits])
 
         bit_triplets = codeword_174.reshape(58, 3)
@@ -226,7 +231,13 @@ class WattersonChannelSimulator:
             delay_samples = int(round((st.multipath_delay_ms * 1e-3) * self.fs))
             g2 = 0.32 * self._rayleigh_doppler_tap(sig_len, st.doppler_spread_hz * 1.4)
             path_2f2 = np.zeros_like(path_1f2)
-            if delay_samples < sig_len:
+            if delay_samples == 0:
+                path_2f2 = (
+                    g2
+                    * s_clean
+                    * np.exp(1j * (phi_ionosphere * 1.35 + phi_tcxo))
+                )
+            elif delay_samples < sig_len:
                 path_2f2[delay_samples:] = (
                     g2[:-delay_samples]
                     * s_clean[:-delay_samples]
@@ -236,7 +247,10 @@ class WattersonChannelSimulator:
             amp = 10.0 ** (st.snr_db / 20.0)
             combined_sig = amp * (path_1f2 + path_2f2)
 
-            rx_buffer[start_sample : start_sample + sig_len] += combined_sig.astype(np.complex64)
+            # Tampon sınır taşması koruması
+            avail_len = max(0, min(sig_len, len(rx_buffer) - start_sample))
+            if avail_len > 0:
+                rx_buffer[start_sample : start_sample + avail_len] += combined_sig[:avail_len].astype(np.complex64)
 
             ground_truth.append({
                 "station": st,

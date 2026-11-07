@@ -4,11 +4,11 @@ Modül 3: Çekirdek Sinyal İşleme (DSP), Costas 2B Uyumlu Filtre,
 Ortak-Mod TCXO Kalibrasyonu, Mikro-Doppler Kestirimi ve Gökyüzü Pre-FEC BER Motoru.
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import numpy as np
 from scipy import signal
 from scipy.special import erfc
-from iono_sense.simulation.watterson import COSTAS_ARRAY
+from iono_sense.simulation.watterson import COSTAS_ARRAY, WSPR_SYNC_VECTOR
 
 
 
@@ -35,8 +35,14 @@ class IonosphericDSPCore:
         shifted = iq_buffer * np.exp(-1j * 2.0 * np.pi * f_center_hz * t)
         # Dar bant doğrusal fazlı FIR alçak geçiren filtre
         numtaps = 257
+        if len(shifted) <= numtaps:
+            return shifted
         taps = signal.firwin(numtaps, cutoff=bw_hz / 2.0, fs=self.fs, window="hamming")
-        filtered = signal.filtfilt(taps, [1.0], shifted)
+        padlen = min(3 * numtaps, len(shifted) - 1) if len(shifted) > 3 * numtaps else None
+        if padlen is not None:
+            filtered = signal.filtfilt(taps, [1.0], shifted, padlen=padlen)
+        else:
+            filtered = signal.lfilter(taps, [1.0], shifted)
         return filtered
 
     def estimate_station_parameters(
@@ -53,14 +59,23 @@ class IonosphericDSPCore:
         # 1. Kanal izolasyonu
         iq_chan = self.isolate_station_channel(iq_buffer, st.base_freq_hz, bw_hz=75.0)
         iq_pkt = iq_chan[start_idx : start_idx + sig_len]
+        if len(iq_pkt) < sig_len:
+            iq_pkt = np.pad(iq_pkt, (0, sig_len - len(iq_pkt)))
 
         # 2. Modülasyon fazını soyma (Phase Stripping)
         phi_mod = gt_entry["phi_mod"]
         z_stripped = iq_pkt * np.exp(-1j * phi_mod)
 
         # Dar bant gürültü bastırma filtresi (Taşıyıcı zarfı/fazı için 10 Hz LPF)
-        taps_narrow = signal.firwin(513, cutoff=8.0, fs=self.fs, window="blackman")
-        z_smooth = signal.filtfilt(taps_narrow, [1.0], z_stripped)
+        numtaps_narrow = min(513, len(z_stripped) - 1 if len(z_stripped) % 2 == 0 else len(z_stripped))
+        if numtaps_narrow >= 15:
+            if numtaps_narrow % 2 == 0:
+                numtaps_narrow -= 1
+            taps_narrow = signal.firwin(numtaps_narrow, cutoff=8.0, fs=self.fs, window="blackman")
+            padlen_narrow = min(3 * numtaps_narrow, len(z_stripped) - 1)
+            z_smooth = signal.filtfilt(taps_narrow, [1.0], z_stripped, padlen=padlen_narrow)
+        else:
+            z_smooth = z_stripped
 
         # 3. Faz Açma (Phase Unwrapping) ve Kaba Frekans Eğimi
         phi_unwrapped = np.unwrap(np.angle(z_smooth))
@@ -72,6 +87,7 @@ class IonosphericDSPCore:
 
         # 4. 8-GFSK Sembol Demodülasyonu ve Ham Pre-FEC Bit Karşılaştırması
         raw_symbols = np.zeros(self.n_symbols, dtype=np.int32)
+        all_tone_energies = np.zeros((self.n_symbols, 8), dtype=np.float64)
         for s_idx in range(self.n_symbols):
             seg = iq_pkt[
                 s_idx * self.samples_per_sym : (s_idx + 1) * self.samples_per_sym
@@ -85,10 +101,12 @@ class IonosphericDSPCore:
                 f_tone = tone * self.tone_spacing
                 ref = np.exp(-1j * 2.0 * np.pi * f_tone * t_seg)
                 tone_energies[tone] = np.abs(np.sum(seg_corr * ref)) ** 2
+            all_tone_energies[s_idx] = tone_energies
             raw_symbols[s_idx] = int(np.argmax(tone_energies))
 
         # Veri sembollerini ayıkla (58 sembol -> 174 ham bit)
         rx_data_syms = np.concatenate([raw_symbols[7:36], raw_symbols[43:72]])
+        tone_energies_data = np.concatenate([all_tone_energies[7:36], all_tone_energies[43:72]], axis=0)
         rx_bits = np.zeros(174, dtype=np.int32)
         for i, sym_val in enumerate(rx_data_syms):
             rx_bits[3 * i] = (sym_val >> 2) & 1
@@ -110,6 +128,9 @@ class IonosphericDSPCore:
             "inst_doppler_true": gt_entry["inst_doppler_true"],
             "pre_fec_ber": pre_fec_ber,
             "bit_errors": bit_errors,
+            "rx_bits": rx_bits,
+            "true_bits": true_bits,
+            "tone_energies_data": tone_energies_data,
             "f_carrier_mhz": f_carrier_mhz,
         }
 
@@ -118,6 +139,9 @@ class IonosphericDSPCore:
         Ortak-Mod (Common-Mode) RSPdx TCXO kaymasını tüm istasyonların medyanından
         kestirir ve her istasyonun saf iyonosferik mikro-Doppler yörüngesini çıkarır.
         """
+        if not station_results:
+            return 0.0, []
+
         offsets = [r["mean_freq_offset_hz"] for r in station_results]
         estimated_tcxo_hz = float(np.median(offsets))
 
@@ -126,23 +150,34 @@ class IonosphericDSPCore:
 
         for r in station_results:
             t_sig = r["t_sig"]
+            if len(t_sig) < 2:
+                continue
             dt = float(t_sig[1] - t_sig[0])
             # Ortak-mod TCXO fazını çıkar
             phi_calibrated = r["phi_unwrapped"] - 2.0 * np.pi * estimated_tcxo_hz * t_sig
 
             # Savitzky-Golay türev filtresi ile anlık mikro-Doppler fd(t)
-            win_len = 1201  # ~0.1 saniye yumuşatma penceresi
-            dphi_dt = signal.savgol_filter(
-                phi_calibrated, window_length=win_len, polyorder=3, deriv=1, delta=dt
-            )
+            # Adaptif pencere uzunluğu: min(1201, len(x) - (1 - len(x)%2))
+            n_pts = len(phi_calibrated)
+            max_odd = n_pts if (n_pts % 2 == 1) else (n_pts - 1)
+            win_len = min(1201, max_odd)
+
+            if win_len >= 5:
+                dphi_dt = signal.savgol_filter(
+                    phi_calibrated, window_length=win_len, polyorder=3, deriv=1, delta=dt
+                )
+            else:
+                dphi_dt = np.gradient(phi_calibrated, dt)
+
             fd_est = dphi_dt / (2.0 * np.pi)
 
             # Doppler Yayılması (İkinci merkezi moment / Standart sapma)
             doppler_spread_est = float(np.std(fd_est))
 
             # Katman dikey plazma hareket hızı: v_z(t) = -c / (2 * fc * cos(theta)) * fd(t)
-            fc_hz = r["f_carrier_mhz"] * 1e6
-            vz_mps = -(c_mps / (2.0 * fc_hz * cos_incidence)) * fd_est
+            fc_hz = max(float(r["f_carrier_mhz"]) * 1e6, 1e3)
+            cos_inc = max(abs(float(cos_incidence)), 1e-3)
+            vz_mps = -(c_mps / (2.0 * fc_hz * cos_inc)) * fd_est
 
             r["fd_est"] = fd_est
             r["doppler_spread_hz"] = doppler_spread_est
@@ -163,13 +198,20 @@ class IonosphericDSPCore:
         c_mps = 2.99792458e8
         fc_hz = f_carrier_mhz * 1e6
         cos_theta = np.cos(np.radians(72.0))
-        rx_buf = wspr_slot["rx_buffer"]
+        rx_buf = np.asarray(wspr_slot.get("rx_buffer", np.array([], dtype=np.complex64)))
         total_len = len(rx_buf)
+        if total_len == 0 or not wspr_slot.get("ground_truth"):
+            return 0.0, []
         total_sec = total_len / self.fs
 
         wspr_tone_spacing = 1.46484375
         wspr_sym_samples = int(round(self.fs * (8192.0 / 12000.0)))
         n_symbols = 162
+        required_samples = n_symbols * wspr_sym_samples
+
+        t_grid = np.arange(required_samples) / self.fs
+        t_matrix = t_grid.reshape(n_symbols, wspr_sym_samples)
+        t_sym = np.arange(wspr_sym_samples) / self.fs
 
         results = []
         raw_drifts = []
@@ -182,36 +224,72 @@ class IonosphericDSPCore:
 
             # Dar bant filtre (25 Hz genişlik)
             numtaps = 513
-            taps = signal.firwin(numtaps, cutoff=12.5, fs=self.fs, window="hamming")
-            chan_filtered = signal.filtfilt(taps, [1.0], shifted)
+            if total_len > 3 * numtaps:
+                taps = signal.firwin(numtaps, cutoff=12.5, fs=self.fs, window="hamming")
+                chan_filtered = signal.filtfilt(taps, [1.0], shifted)
+            else:
+                chan_filtered = shifted
 
-            # Sembol bazında ton enerjilerini ölçerek zaman-frekans izi çıkar
-            time_centers = []
-            freq_peaks = []
+            # Defansif sıfır doldurma / kırpma koruması (Zero-padding / truncation guard)
+            if len(chan_filtered) < required_samples:
+                chan_filtered = np.pad(chan_filtered, (0, required_samples - len(chan_filtered)), mode="constant")
+            else:
+                chan_filtered = chan_filtered[:required_samples]
 
-            for s_idx in range(n_symbols):
-                seg = chan_filtered[s_idx * wspr_sym_samples : (s_idx + 1) * wspr_sym_samples]
-                t_seg = np.arange(len(seg)) / self.fs
-                # 4 WSPR tonu için korelasyon
-                powers = np.zeros(4)
-                for tone in range(4):
-                    ref = np.exp(-1j * 2.0 * np.pi * (tone * wspr_tone_spacing) * t_seg)
-                    powers[tone] = np.abs(np.sum(seg * ref)) ** 2
-                best_tone = np.argmax(powers)
-                time_centers.append((s_idx + 0.5) * (8192.0 / 12000.0))
-                freq_peaks.append(best_tone * wspr_tone_spacing)
+            # Dar bant sürekli dalga (CW) girişim bastırma (Iterative spectral spike excision)
+            X = np.fft.fft(chan_filtered)
+            psd = np.abs(X) ** 2
+            freqs = np.fft.fftfreq(len(chan_filtered), d=1.0 / self.fs)
+            pb = np.abs(freqs) < 12.5
+            med_pb = float(np.median(psd[pb]))
+            notch_width = 7  # +/- 7 bins = +/- 0.063 Hz at fs=12000, N=1327104
 
-            time_centers = np.array(time_centers)
-            freq_peaks = np.array(freq_peaks)
+            notched = False
+            for _ in range(3):
+                max_idx = int(np.argmax(np.where(pb, psd, 0.0)))
+                if psd[max_idx] > 50000.0 * med_pb and med_pb > 0:
+                    k0 = max(0, max_idx - notch_width)
+                    k1 = min(len(X), max_idx + notch_width + 1)
+                    X[k0:k1] = 0.0
+                    psd[k0:k1] = 0.0
+                    notched = True
+                else:
+                    break
+            if notched:
+                chan_filtered = np.fft.ifft(X).astype(np.complex64)
 
-            # Doğrusal regresyon ile ölçülen toplam sürüklenme (drift)
-            # Sürüklenme: Hz/dk cinsine dönüştür
-            p = np.polyfit(time_centers, freq_peaks, 1)
-            meas_drift_hz_sec = float(p[0])
-            meas_drift_hz_min = meas_drift_hz_sec * 60.0
+            # Matris tabanlı de-drift hipotez araması (WSPR sync vector rehberliğinde)
+            candidate_drifts = np.linspace(-2.4, 2.4, 25)
+            chan_matrix = chan_filtered.reshape(n_symbols, wspr_sym_samples)
 
-            # Gerçek toplam sürüklenme değerini de ekleyerek test/doğrulama
-            raw_drifts.append(gt["total_drift_hz_min"])
+            tones_0 = np.array([np.exp(-1j * 2.0 * np.pi * (m * wspr_tone_spacing) * t_sym) for m in [0, 1]])
+            tones_1 = np.array([np.exp(-1j * 2.0 * np.pi * (m * wspr_tone_spacing) * t_sym) for m in [2, 3]])
+
+            scores = []
+            for d in candidate_drifts:
+                d_sec = d / 60.0
+                dedrift_phase = np.exp(-1j * np.pi * d_sec * (t_matrix**2))
+                sig_d = chan_matrix * dedrift_phase
+                corr_0 = np.abs(sig_d[WSPR_SYNC_VECTOR == 0] @ tones_0.T)**2
+                corr_1 = np.abs(sig_d[WSPR_SYNC_VECTOR == 1] @ tones_1.T)**2
+                scores.append(float(np.sum(np.max(corr_0, axis=1)) + np.sum(np.max(corr_1, axis=1))))
+
+            best_coarse_idx = int(np.argmax(scores))
+            d_coarse = candidate_drifts[best_coarse_idx]
+
+            # İnce arama: d_coarse civarında +/- 0.25 Hz/dk (11 aday)
+            fine_drifts = np.linspace(d_coarse - 0.25, d_coarse + 0.25, 11)
+            fine_scores = []
+            for d in fine_drifts:
+                d_sec = d / 60.0
+                dedrift_phase = np.exp(-1j * np.pi * d_sec * (t_matrix**2))
+                sig_d = chan_matrix * dedrift_phase
+                corr_0 = np.abs(sig_d[WSPR_SYNC_VECTOR == 0] @ tones_0.T)**2
+                corr_1 = np.abs(sig_d[WSPR_SYNC_VECTOR == 1] @ tones_1.T)**2
+                fine_scores.append(float(np.sum(np.max(corr_0, axis=1)) + np.sum(np.max(corr_1, axis=1))))
+
+            best_fine_idx = int(np.argmax(fine_scores))
+            meas_drift_hz_min = float(fine_drifts[best_fine_idx])
 
             results.append({
                 "callsign": st.callsign,
@@ -220,11 +298,11 @@ class IonosphericDSPCore:
                 "snr_db": st.snr_db,
                 "true_drift_hz_min": gt["drift_hz_per_min"],
                 "total_drift_hz_min": gt["total_drift_hz_min"],
-                "meas_drift_hz_min": gt["total_drift_hz_min"] + 0.05 * np.random.randn(),
+                "meas_drift_hz_min": meas_drift_hz_min,
             })
 
-        # Ortak donanım TCXO sürüklenme eğimini kestir (tüm istasyonların ortalama faz eğimi)
-        est_tcxo_drift_slope = float(np.median([r["meas_drift_hz_min"] - r["true_drift_hz_min"] for r in results]))
+        # Ortak donanım TCXO sürüklenme eğimini kestir (tüm istasyonların ölçülen medyanı)
+        est_tcxo_drift_slope = float(np.median([r["meas_drift_hz_min"] for r in results])) if results else 0.0
 
         # İyonosferik net sürüklenme ve katman dikey ivmesi a_z = dv_z/dt
         for r in results:
@@ -237,20 +315,84 @@ class IonosphericDSPCore:
 
         return est_tcxo_drift_slope, results
 
-    def compute_scattering_function(self, z_smooth: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def compute_scattering_function(
+        self,
+        z_smooth: Optional[np.ndarray],
+        s_ref: Optional[np.ndarray] = None,
+        tau_ms: Optional[np.ndarray] = None,
+        fd_hz: Optional[np.ndarray] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
-        Kanal Saçılma Fonksiyonu S(tau, f_d) (1F2 ve 2F2 Çok-Yollu Enerji Haritası).
+        2B Gecikme-Doppler Kanal Saçılma Fonksiyonu S(tau, fd) (Cross-Ambiguity Matched Filter).
+        Girdi karmaşık zarfı z_smooth ve referans sinyal s_ref (veya otokorelasyon) üzerinden
+        gecikme ve Doppler kaymasını koruyarak 2B saçılma fonksiyonunu hesaplar.
         """
-        tau_ms = np.linspace(0.0, 3.5, 80)
-        fd_hz = np.linspace(-1.5, 1.5, 80)
-        TAU, FD = np.meshgrid(tau_ms, fd_hz)
+        if tau_ms is None:
+            tau_ms = np.linspace(0.0, 3.5, 80)
+        if fd_hz is None:
+            fd_hz = np.linspace(-1.5, 1.5, 80)
 
-        # 1F2 Ana mod (tau = 0.0 ms, fd = +0.42 Hz) ve 2F2 İkincil mod (tau = 1.25 ms, fd = +0.58 Hz)
-        S_1f2 = np.exp(-((TAU - 0.15) / 0.28) ** 2 - ((FD - 0.42) / 0.18) ** 2)
-        S_2f2 = 0.38 * np.exp(-((TAU - 1.35) / 0.35) ** 2 - ((FD - 0.62) / 0.26) ** 2)
-        noise_floor = 0.03 * np.abs(np.sin(TAU * 3.1) * np.cos(FD * 4.7))
-        S_total_db = 10.0 * np.log10(S_1f2 + S_2f2 + noise_floor + 1e-3)
-        return tau_ms, fd_hz, S_total_db
+        n_tau = len(tau_ms)
+        n_fd = len(fd_hz)
+
+        if z_smooth is None or len(z_smooth) < 20 or np.all(np.abs(z_smooth) < 1e-10):
+            return tau_ms, fd_hz, np.full((n_fd, n_tau), -40.0, dtype=np.float64)
+
+        z = np.nan_to_num(z_smooth, nan=0.0, posinf=0.0, neginf=0.0).astype(np.complex128)
+        N = len(z)
+
+        # 12 kHz örnekleme hızını ~200 Hz etkin hıza seyrelt
+        ds = max(1, int(round(self.fs / 200.0)))
+        fs_eff = self.fs / ds
+        S_mat = np.zeros((n_fd, n_tau), dtype=np.float64)
+
+        for i, tau in enumerate(tau_ms):
+            lag = int(round((tau * 1e-3) * self.fs))
+            if lag < 0 or lag >= N:
+                continue
+
+            if s_ref is not None and len(s_ref) > 0:
+                s = np.nan_to_num(s_ref, nan=0.0).astype(np.complex128)
+                len_corr = min(N - lag, len(s))
+                if len_corr <= 0:
+                    continue
+                y_tau = z[lag : lag + len_corr] * np.conj(s[:len_corr])
+            else:
+                if lag == 0:
+                    y_tau = z
+                else:
+                    y_tau = z[lag:] * np.conj(z[:N - lag])
+
+            if len(y_tau) >= ds * 4:
+                numtaps = min(31, len(y_tau) - 1)
+                if numtaps % 2 == 0:
+                    numtaps -= 1
+                if numtaps >= 5:
+                    taps = signal.firwin(numtaps, cutoff=0.8 / ds, window="hamming")
+                    y_ds = signal.filtfilt(taps, [1.0], y_tau)[::ds]
+                else:
+                    y_ds = y_tau[::ds]
+            else:
+                y_ds = y_tau
+
+            if len(y_ds) < 4:
+                continue
+
+            win = np.hanning(len(y_ds))
+            fft_y = np.fft.fftshift(np.fft.fft(y_ds * win, n=max(n_fd, len(y_ds))))
+            freqs_y = np.fft.fftshift(np.fft.fftfreq(len(fft_y), d=1.0 / fs_eff))
+            p_y = np.abs(fft_y) ** 2
+
+            S_mat[:, i] = np.interp(fd_hz, freqs_y, p_y, left=0.0, right=0.0)
+
+        max_p = np.max(S_mat)
+        if max_p > 0.0:
+            S_db = 10.0 * np.log10(S_mat / max_p + 1e-4)
+        else:
+            S_db = np.full((n_fd, n_tau), -40.0, dtype=np.float64)
+
+        S_db = np.clip(S_db, -40.0, 0.0)
+        return tau_ms, fd_hz, S_db
 
     @staticmethod
     def compute_multimode_ber_curves() -> Dict[str, np.ndarray]:

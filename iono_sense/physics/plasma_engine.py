@@ -103,9 +103,11 @@ class IonosphericPlasmaEngine:
 
     def _dynamic_chapman_layer(self, hm_km: float, Nm: float, H_ref_km: float) -> np.ndarray:
         """İrtifaya bağlı değişken ölçek yüksekliği H(h) kullanan genelleştirilmiş Chapman fonksiyonu."""
-        # İndirgenmiş irtifa: z(h) = integral (dh / H(h))
-        # Yerel yaklaşım: z = (h - hm) / H(h)
-        z = (self.h_km - hm_km) / self.H_km
+        # İndirgenmiş irtifa: z(h) = (h - hm) / H_layer(h)
+        # Katman ölçek yüksekliği, referans H_ref_km ve irtifaya bağlı neutral scale height oranı ile ölçeklenir:
+        H_at_hm = float(np.interp(hm_km, self.h_km, self.H_km))
+        H_layer = H_ref_km * (self.H_km / max(H_at_hm, 1e-3))
+        z = (self.h_km - hm_km) / H_layer
         return Nm * np.exp(0.5 * (1.0 - z - np.exp(-z)))
 
     def _build_dynamic_chapman_profile(self) -> np.ndarray:
@@ -197,39 +199,67 @@ class IonosphericPlasmaEngine:
             hop_dist_km = float(2.0 * self.cfg.R_earth_m * gamma / 1e3)
 
         # 2. Haselgrove Diferansiyel Yol Elemanı ds(h)
-        # ds = dh / sqrt(1 - (r0 * cos(elev) / (r(h) * mu(h)))^2)
-        sl = slice(0, max(h_max_idx, 2))
-        h_slice = self.h_m[sl]
-        r_slice = self.r_m[sl]
-        Ne_s = self.Ne[sl]
-        nu_s = self.nu[sl]
-        wp2_s = omega_p2[sl]
-        omega_H_s = self.omega_H[sl]
+        # O-Modu ve X-Modu yansıma kesimleri:
+        # X-modu kesimi: X = 1 - Y (veya eğik insidansta mu_X <= cutoff)
+        X_all = (self.fp_hz / f_carrier_hz) ** 2
+        Y_all = self.f_H / f_carrier_hz
+        mu_X_approx_sq = 1.0 - X_all / np.maximum(1.0 - Y_all, 0.01)
+        valid_refl_X = np.where((X_all >= (1.0 - Y_all)) | (mu_X_approx_sq <= (refractive_cutoff**2)))[0]
+        h_max_idx_X = int(valid_refl_X[0]) if len(valid_refl_X) > 0 else h_max_idx
+
+        # O-modu dilimi
+        sl_O = slice(0, max(h_max_idx, 2))
+        h_slice_O = self.h_m[sl_O]
+        r_slice_O = self.r_m[sl_O]
+        Ne_s = self.Ne[sl_O]
+        nu_s = self.nu[sl_O]
+        wp2_s = omega_p2[sl_O]
+        omega_H_s = self.omega_H[sl_O]
+
+        # X-modu dilimi (kendi yansıma yüksekliğinde kesilmiş)
+        sl_X = slice(0, max(h_max_idx_X, 2))
+        h_slice_X = self.h_m[sl_X]
+        r_slice_X = self.r_m[sl_X]
+        Ne_s_X = self.Ne[sl_X]
+        nu_s_X = self.nu[sl_X]
+        wp2_s_X = omega_p2[sl_X]
+        omega_H_s_X = self.omega_H[sl_X]
 
         # 3. Tam Magneto-İyonik Parametreler (İrtifaya bağlı B(h) ve omega_H(h))
-        X = np.clip(wp2_s / (omega**2), 0.0, 0.99)
-        Z = nu_s / omega
-        Y = omega_H_s / omega
-
         theta_mag = np.radians(abs(self.cfg.dip_angle_deg - elevation_deg))
-        Y_L = Y * np.cos(theta_mag)
-        Y_T = Y * np.sin(theta_mag)
 
-        denom_base = 1.0 - X - 1j * Z
-        term_T = (Y_T**2) / (2.0 * denom_base)
-        radicand = (Y_T**4) / (4.0 * (denom_base**2)) + (Y_L**2)
-        sqrt_term = np.sqrt(radicand.astype(np.complex128))
+        # O-Modu
+        X_O = np.clip(wp2_s / (omega**2), 0.0, 0.99)
+        Z_O = nu_s / omega
+        Y_O = omega_H_s / omega
+        Y_L_O = Y_O * np.cos(theta_mag)
+        Y_T_O = Y_O * np.sin(theta_mag)
 
-        n2_O = 1.0 - X / (1.0 - 1j * Z - term_T + sqrt_term)
-        n2_X = 1.0 - X / (1.0 - 1j * Z - term_T - sqrt_term)
+        denom_base_O = 1.0 - X_O - 1j * Z_O
+        term_T_O = (Y_T_O**2) / (2.0 * denom_base_O)
+        radicand_O = (Y_T_O**4) / (4.0 * (denom_base_O**2)) + (Y_L_O**2)
+        sqrt_term_O = np.sqrt(radicand_O.astype(np.complex128))
 
+        n2_O = 1.0 - X_O / (1.0 - 1j * Z_O - term_T_O + sqrt_term_O)
         n_O = np.sqrt(n2_O)
-        n_X = np.sqrt(n2_X)
-
         mu_O = np.maximum(np.real(n_O), 0.05)
-        mu_X = np.maximum(np.real(n_X), 0.05)
-
         alpha_O = (omega / self.c) * np.abs(np.imag(n_O))
+
+        # X-Modu
+        X_X = np.clip(wp2_s_X / (omega**2), 0.0, 0.99)
+        Z_X = nu_s_X / omega
+        Y_X = omega_H_s_X / omega
+        Y_L_X = Y_X * np.cos(theta_mag)
+        Y_T_X = Y_X * np.sin(theta_mag)
+
+        denom_base_X = 1.0 - X_X - 1j * Z_X
+        term_T_X = (Y_T_X**2) / (2.0 * denom_base_X)
+        radicand_X = (Y_T_X**4) / (4.0 * (denom_base_X**2)) + (Y_L_X**2)
+        sqrt_term_X = np.sqrt(radicand_X.astype(np.complex128))
+
+        n2_X = 1.0 - X_X / (1.0 - 1j * Z_X - term_T_X - sqrt_term_X)
+        n_X = np.sqrt(n2_X)
+        mu_X = np.maximum(np.real(n_X), 0.05)
         alpha_X = (omega / self.c) * np.abs(np.imag(n_X))
 
         # 4. Kaba 1/f^2 Ders Kitabı Modeli
@@ -244,10 +274,10 @@ class IonosphericPlasmaEngine:
 
         # 6. Haselgrove Diferansiyel Eğik Yol Faktörü (Sapmalı Emilim ve Küresel Geometri)
         # ds / dh = 1 / sqrt(1 - (r0 * cos_elev / (r * mu))^2)
-        sin_psi_O_sq = (snell_constant / (r_slice * mu_O)) ** 2
+        sin_psi_O_sq = (snell_constant / (r_slice_O * mu_O)) ** 2
         ds_dh_O = 1.0 / np.sqrt(np.maximum(1.0 - sin_psi_O_sq, 0.015))
 
-        sin_psi_X_sq = (snell_constant / (r_slice * mu_X)) ** 2
+        sin_psi_X_sq = (snell_constant / (r_slice_X * mu_X)) ** 2
         ds_dh_X = 1.0 / np.sqrt(np.maximum(1.0 - sin_psi_X_sq, 0.015))
 
         # Düz dünya kaba katsayısı (karşılaştırma için)
@@ -256,10 +286,10 @@ class IonosphericPlasmaEngine:
         # İki yönlü (gidiş-dönüş = x2) ve Neper -> dB (8.6858896) dönüşümü
         db_factor = 2.0 * 8.6858896
 
-        loss_approx_db = integrate_trapz(alpha_approx * flat_ds_dh, h_slice) * db_factor
-        loss_O_db = integrate_trapz(alpha_O * ds_dh_O, h_slice) * db_factor
-        loss_X_db = integrate_trapz(alpha_X * ds_dh_X, h_slice) * db_factor
-        loss_sw_O_db = integrate_trapz(alpha_sen_wyller_O * ds_dh_O, h_slice) * db_factor
+        loss_approx_db = integrate_trapz(alpha_approx * flat_ds_dh, h_slice_O) * db_factor
+        loss_O_db = integrate_trapz(alpha_O * ds_dh_O, h_slice_O) * db_factor
+        loss_X_db = integrate_trapz(alpha_X * ds_dh_X, h_slice_X) * db_factor
+        loss_sw_O_db = integrate_trapz(alpha_sen_wyller_O * ds_dh_O, h_slice_O) * db_factor
 
         return {
             "freq_mhz": f_carrier_hz / 1e6,

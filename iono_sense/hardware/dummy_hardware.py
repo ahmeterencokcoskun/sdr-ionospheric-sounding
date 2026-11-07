@@ -9,7 +9,7 @@ import sqlite3
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import numpy as np
 
 from iono_sense.simulation.watterson import WattersonChannelSimulator
@@ -56,6 +56,43 @@ class DummyLoadHardware:
             )
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ionospheric_soundings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                utc_timestamp TEXT,
+                f_min_mhz REAL,
+                f_max_mhz REAL,
+                foF2_mhz REAL,
+                hmF2_km REAL,
+                NmF2_m3 REAL,
+                subpeak_tec_tecu REAL,
+                inversion_method TEXT,
+                residual_rms_km REAL,
+                status TEXT
+            )
+            """
+        )
+
+        # Şema Sağlamlaştırma (Defensive Column Migration)
+        cur.execute("PRAGMA table_info(ionospheric_soundings)")
+        existing_cols = {row[1] for row in cur.fetchall()}
+        expected_cols = {
+            "utc_timestamp": "TEXT",
+            "f_min_mhz": "REAL",
+            "f_max_mhz": "REAL",
+            "foF2_mhz": "REAL",
+            "hmF2_km": "REAL",
+            "NmF2_m3": "REAL",
+            "subpeak_tec_tecu": "REAL",
+            "inversion_method": "TEXT",
+            "residual_rms_km": "REAL",
+            "status": "TEXT",
+        }
+        for col_name, col_type in expected_cols.items():
+            if col_name not in existing_cols:
+                cur.execute(f"ALTER TABLE ionospheric_soundings ADD COLUMN {col_name} {col_type}")
+
         conn.commit()
         conn.close()
 
@@ -92,6 +129,51 @@ class DummyLoadHardware:
         conn.commit()
         conn.close()
 
+    def log_inversion(
+        self,
+        inversion_result: Any,
+        f_min_mhz: float = 1.0,
+        f_max_mhz: float = 15.0,
+        method: str = "jackson",
+        status: str = "CONVERGED",
+    ) -> None:
+        """
+        Gerçek irtifa tersinim sonuçlarını ionospheric_soundings tablosuna yazar.
+        Dataclass ve sözlük formatlarını destekler.
+        """
+        foF2 = float(getattr(inversion_result, "foF2_mhz", inversion_result.get("foF2_mhz", 0.0) if isinstance(inversion_result, dict) else 0.0))
+        hmF2 = float(getattr(inversion_result, "hmF2_km", inversion_result.get("hmF2_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
+        NmF2 = float(getattr(inversion_result, "NmF2_m3", inversion_result.get("NmF2_m3", 0.0) if isinstance(inversion_result, dict) else 0.0))
+        tec = float(getattr(inversion_result, "subpeak_tec_tecu", inversion_result.get("subpeak_tec_tecu", 0.0) if isinstance(inversion_result, dict) else 0.0))
+        residual_rms = float(getattr(inversion_result, "residual_rms_km", inversion_result.get("residual_rms_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
+
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO ionospheric_soundings
+            (utc_timestamp, f_min_mhz, f_max_mhz, foF2_mhz, hmF2_km,
+             NmF2_m3, subpeak_tec_tecu, inversion_method, residual_rms_km, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                now_str,
+                float(f_min_mhz),
+                float(f_max_mhz),
+                foF2,
+                hmF2,
+                NmF2,
+                tec,
+                str(method),
+                residual_rms,
+                str(status),
+            ),
+        )
+        conn.commit()
+        conn.close()
+
     @staticmethod
     def get_space_weather_snapshot() -> Dict[str, float]:
         """
@@ -121,8 +203,12 @@ class DummyLoadHardware:
                     latest = data_lines[-1].split()
                     # Format: YYYY MM DD  Radio_Flux(10.7cm)  Sunspot_Number  SESC_Sunspot_Area ...
                     if len(latest) >= 5:
-                        telemetry["SFI"] = float(latest[3])
-                        telemetry["SN"] = float(latest[4])
+                        sfi_val = float(latest[3])
+                        sn_val = float(latest[4])
+                        if sfi_val > 0.0:
+                            telemetry["SFI"] = sfi_val
+                        if sn_val >= 0.0:
+                            telemetry["SN"] = sn_val
         except Exception:
             pass
 
@@ -135,11 +221,15 @@ class DummyLoadHardware:
                 data_lines = [l for l in lines if l and not l.startswith("#") and not l.startswith(":")]
                 if data_lines:
                     latest = data_lines[-1].split()
-                    # Tipik kolonlarda A indeksi ve tahmini Kp indeksleri bulunur
+                    # Tipik kolonlarda A indeksi ve tahmini Kp indeksleri bulunur (-1.0 eksik veri korunur)
                     if len(latest) >= 4:
-                        telemetry["A_index"] = float(latest[3])
-                    if len(latest) >= 5 and latest[4] != "-1":
-                        telemetry["Kp"] = float(latest[4])
+                        a_val = float(latest[3])
+                        if a_val >= 0.0:
+                            telemetry["A_index"] = a_val
+                    if len(latest) >= 5:
+                        kp_val = float(latest[4])
+                        if kp_val >= 0.0:
+                            telemetry["Kp"] = kp_val
         except Exception:
             pass
 

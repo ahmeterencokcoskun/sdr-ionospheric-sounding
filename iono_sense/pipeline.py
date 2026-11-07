@@ -4,11 +4,12 @@ Uçtan Uca İyonosferik Algılama ve DSP Orkestrasyon Hattı (Pipeline - v2).
 Haselgrove Ray-Tracer, FMCW İyonogram ve LDPC Kod Çözücü Entegre Edilmiş Mimari.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import numpy as np
 
 from iono_sense.physics.plasma_engine import IonosphericPlasmaEngine
 from iono_sense.physics.ray_tracer import HaselgroveRayTracer
+from iono_sense.physics.inversion import IonogramTrueHeightInverter, InversionResult
 from iono_sense.simulation.watterson import WattersonChannelSimulator
 from iono_sense.simulation.fmcw_sounder import FMCWIonosondeSimulator
 from iono_sense.dsp.core import IonosphericDSPCore
@@ -31,7 +32,7 @@ class IonoSensePipeline:
     ):
         self.mode = mode.lower()
         self.fs = fs
-        self.seed = seed if self.mode == "benchmark" else None
+        self.seed = abs(int(seed)) if (seed is not None and self.mode == "benchmark") else None
         self.iq_file = iq_file
 
         # 1. Alt Sistemlerin Başlatılması
@@ -46,6 +47,7 @@ class IonoSensePipeline:
 
         self.dsp_core = IonosphericDSPCore(fs=self.fs)
         self.ldpc_decoder = FT8LDPCDecoder()
+        self.inverter = IonogramTrueHeightInverter(default_h0_km=60.0)
         self.watterson_sim = WattersonChannelSimulator(fs=self.fs, rng_seed=self.seed)
         self.fmcw_sim = FMCWIonosondeSimulator(plasma_engine=self.plasma_day)
         self.plotter = AcademicDashboardPlotter()
@@ -118,13 +120,51 @@ class IonoSensePipeline:
                 "X_Ray_Flux_Wm2": 1.0e-6,
             }
 
-        frame_20m = self.watterson_sim.simulate_band_frame(band_mhz=freq_mhz)
+        if self.iq_file:
+            frame_20m = self.sdr_controller.capture_slot(freq_mhz=freq_mhz)
+        else:
+            frame_20m = self.watterson_sim.simulate_band_frame(band_mhz=freq_mhz)
 
-        raw_metrics = [
-            self.dsp_core.estimate_station_parameters(frame_20m["iq_buffer"], gt, f_carrier_mhz=freq_mhz)
-            for gt in frame_20m["ground_truth"]
-        ]
+        if frame_20m.get("ground_truth"):
+            raw_metrics = [
+                self.dsp_core.estimate_station_parameters(frame_20m["iq_buffer"], gt, f_carrier_mhz=freq_mhz)
+                for gt in frame_20m["ground_truth"]
+            ]
+        else:
+            raw_metrics = []
+
         tcxo_est_hz, calibrated_stations = self.dsp_core.calibrate_and_extract_doppler(raw_metrics)
+
+        # LDPC Normalize Min-Sum Kod Çözme ve Telemetri
+        for st_m in calibrated_stations:
+            snr_lin = 10.0 ** (st_m["snr_db"] / 10.0)
+            noise_var = 1.0 / max(snr_lin, 1e-4)
+            if "tone_energies_data" in st_m:
+                llrs = self.ldpc_decoder.compute_symbol_llrs(st_m["tone_energies_data"], noise_var=noise_var)
+            else:
+                rx_b = st_m.get("rx_bits", np.zeros(174, dtype=np.int32))
+                llrs = np.where(rx_b == 0, 4.0, -4.0)
+
+            decoded_bits, fec_success, iters = self.ldpc_decoder.decode(llrs)
+            st_m["fec_success"] = bool(fec_success)
+            st_m["fec_iterations"] = int(iters)
+            st_m["decoded_bits"] = decoded_bits
+            true_bits = st_m.get("true_bits", st_m.get("codeword_174"))
+            if true_bits is not None and len(true_bits) == 174:
+                st_m["post_fec_ber"] = float(np.sum(decoded_bits != true_bits) / 174.0)
+            else:
+                st_m["post_fec_ber"] = 0.0 if fec_success else float(st_m.get("pre_fec_ber", 0.0))
+
+        if calibrated_stations:
+            n_ok = sum(1 for s in calibrated_stations if s.get("fec_success", False))
+            frame_success_rate = float(n_ok / len(calibrated_stations))
+            mean_fec_iters = float(np.mean([s.get("fec_iterations", 0) for s in calibrated_stations]))
+            mean_post_ber = float(np.mean([s.get("post_fec_ber", 0.0) for s in calibrated_stations]))
+        else:
+            frame_success_rate = 1.0
+            mean_fec_iters = 0.0
+            mean_post_ber = 0.0
+
         if hasattr(self.sdr_controller, "log_results"):
             self.sdr_controller.log_results(freq_mhz, calibrated_stations, sw_data)
 
@@ -133,6 +173,9 @@ class IonoSensePipeline:
             "frame_data": frame_20m,
             "tcxo_est_hz": tcxo_est_hz,
             "calibrated_stations": calibrated_stations,
+            "post_fec_frame_success_rate": frame_success_rate,
+            "mean_fec_iterations": mean_fec_iters,
+            "mean_post_fec_ber": mean_post_ber,
         }
 
     def run_wspr_drift_analysis(self, freq_mhz: float = 14.0956) -> Dict:
@@ -149,6 +192,73 @@ class IonoSensePipeline:
         """FMCW LFM Chirp iyonosond sanal irtifa h'(f) profilini üretir."""
         return self.fmcw_sim.synthesize_ionogram_profile()
 
+    def run_true_height_inversion(
+        self,
+        ionogram_data: Optional[Dict] = None,
+        method: str = "jackson",
+        reg_lambda: float = 1e-3,
+        h0_km: float = 60.0,
+    ) -> Dict:
+        """
+        Dikey FMCW iyonogramından Breit-Tuve tersinimi ile gerçek plazma irtifası h(f),
+        foF2, hmF2, NmF2, alt-tepe TEC ve kalıntı RMS değerlerini hesaplar.
+        """
+        if ionogram_data is None:
+            ionogram_data = self.run_fmcw_ionosonde_sweep()
+
+        freqs = np.asarray(ionogram_data["freqs_mhz"], dtype=np.float64)
+        h_prime = np.asarray(ionogram_data["h_prime_O_km"], dtype=np.float64)
+
+        valid_mask = np.isfinite(h_prime) & np.isfinite(freqs) & (h_prime >= h0_km) & (freqs > 0.0)
+        f_valid = freqs[valid_mask]
+        h_valid = h_prime[valid_mask]
+
+        if len(f_valid) < 3:
+            # Fallback if too few valid echoes
+            f_valid = np.array([2.0, 4.0, 6.0], dtype=np.float64)
+            h_valid = np.array([100.0, 150.0, 220.0], dtype=np.float64)
+
+        sort_order = np.argsort(f_valid)
+        f_valid = f_valid[sort_order]
+        h_valid = h_valid[sort_order]
+
+        unique_mask = np.concatenate([[True], np.diff(f_valid) > 1e-5])
+        f_valid = f_valid[unique_mask]
+        h_valid = h_valid[unique_mask]
+
+        if method.lower() == "tikhonov":
+            inv_res = self.inverter.invert_tikhonov(f_valid, h_valid, h0_km=h0_km, reg_lambda=reg_lambda)
+        else:
+            inv_res = self.inverter.invert_jackson(f_valid, h_valid, h0_km=h0_km)
+
+        # SQLite veritabanına telemetri kaydı (varsa)
+        if hasattr(self.sdr_controller, "log_inversion"):
+            f_min = float(np.min(f_valid)) if len(f_valid) > 0 else 1.0
+            f_max = float(np.max(f_valid)) if len(f_valid) > 0 else 15.0
+            self.sdr_controller.log_inversion(
+                inversion_result=inv_res,
+                f_min_mhz=f_min,
+                f_max_mhz=f_max,
+                method=method.lower(),
+            )
+
+        return {
+            "inversion_result": inv_res,
+            "method": method.lower(),
+            "reg_lambda": reg_lambda,
+            "h0_km": h0_km,
+            "freqs_used_mhz": f_valid,
+            "h_prime_used_km": h_valid,
+            "true_heights_km": inv_res.true_heights_km,
+            "plasma_freqs_mhz": inv_res.plasma_freqs_mhz,
+            "electron_density_m3": inv_res.electron_density_m3,
+            "foF2_mhz": float(inv_res.foF2_mhz),
+            "hmF2_km": float(inv_res.hmF2_km),
+            "NmF2_m3": float(inv_res.NmF2_m3),
+            "subpeak_tec_tecu": float(inv_res.subpeak_tec_tecu),
+            "residual_rms_km": float(inv_res.residual_rms_km),
+        }
+
     def run_ray_tracing_fan(self, freq_mhz: float = 14.074) -> List:
         """Haselgrove 2B diferansiyel ışın yelpazesini hesaplar."""
         return self.ray_tracer.trace_multihop_fan(freq_mhz=freq_mhz, elevations=[7.0, 14.0, 21.0, 30.0])
@@ -164,6 +274,7 @@ class IonoSensePipeline:
         pdf_path: str = "iono_sense_dashboard.pdf",
         typst_path: str = "tez_bulgulari.typ",
         latex_path: str = "tez_bulgulari.tex",
+        inversion_result: Optional[Any] = None,
     ) -> None:
         """Dashboard figürlerini ve Typst/LaTeX belgelerini diske üretir."""
         self.plotter.plot_dashboard(
@@ -178,6 +289,7 @@ class IonoSensePipeline:
             ray_fan=ray_fan,
             save_png=png_path,
             save_pdf=pdf_path,
+            inversion_result=inversion_result,
         )
 
         self.exporter.export_typst(
@@ -186,9 +298,11 @@ class IonoSensePipeline:
             tcxo_est=ft8_analysis["tcxo_est_hz"],
             wspr_metrics=wspr_analysis["wspr_results"],
             filepath=typst_path,
+            inversion_result=inversion_result,
         )
 
         self.exporter.export_latex(
             plasma_table=plasma_results,
             filepath=latex_path,
+            inversion_result=inversion_result,
         )

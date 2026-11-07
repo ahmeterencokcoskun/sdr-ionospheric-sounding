@@ -27,17 +27,29 @@ class IQFilePlaybackHardware:
 
         suffix = self.path.suffix.lower()
 
-        # 1. WAV Formatı (Stereo Left=I, Right=Q)
+        # 1. WAV Formatı (Stereo Left=I, Right=Q veya Mono)
         if suffix == ".wav" or self.format_type == "wav":
             try:
                 from scipy.io import wavfile
+                from scipy import signal
                 fs_read, data = wavfile.read(self.path)
                 if data.ndim == 2 and data.shape[1] >= 2:
                     # Normalize et
                     max_val = np.max(np.abs(data)) if np.max(np.abs(data)) > 0 else 1.0
                     i_ch = data[:, 0].astype(np.float32) / max_val
                     q_ch = data[:, 1].astype(np.float32) / max_val
-                    return (i_ch + 1j * q_ch).astype(np.complex64)
+                    c_sig = (i_ch + 1j * q_ch).astype(np.complex64)
+                else:
+                    data_flat = data.flatten()
+                    max_val = np.max(np.abs(data_flat)) if np.max(np.abs(data_flat)) > 0 else 1.0
+                    c_sig = (data_flat.astype(np.float32) / max_val).astype(np.complex64)
+
+                # WAV başlığındaki örnek hızı hedef self.fs ile uyuşmuyorsa yeniden örnekle
+                if fs_read > 0 and fs_read != self.fs:
+                    num_target = int(round(len(c_sig) * float(self.fs) / float(fs_read)))
+                    if num_target > 0:
+                        c_sig = signal.resample(c_sig, num_target).astype(np.complex64)
+                return c_sig
             except Exception:
                 pass
 

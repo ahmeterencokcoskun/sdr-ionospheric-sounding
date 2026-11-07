@@ -7,13 +7,29 @@
 \hline
 \textbf{Frekans (MHz)} & \textbf{Katman} & \textbf{$h_{\mathrm{refl}}$ (km)} & \textbf{Basit $1/f^2$ (dB)} & \textbf{O-Modu (dB)} & \textbf{X-Modu (dB)} & \textbf{Hata Payı (dB)} \\
 \hline
-1.840 & D & 89.0 & 212.72 & 122.46 & 1313.62 & 1100.89 \\
-3.573 & D & 90.5 & 76.08 & 49.23 & 144.34 & 68.27 \\
-7.074 & E / Es & 94.0 & 29.77 & 24.86 & 48.57 & 18.80 \\
-10.136 & E / Es & 102.5 & 26.30 & 26.81 & 46.67 & 20.37 \\
-14.074 & E / Es & 141.0 & 17.73 & 16.53 & 22.85 & 5.11 \\
-21.074 & F1 & 188.5 & 7.96 & 6.92 & 8.40 & 0.45 \\
-28.074 & F2 & 246.5 & 4.52 & 3.92 & 4.53 & 0.02 \\
+1.840 & E / Es & 95.0 & 265.31 & 157.51 & 116.53 & 148.78 \\
+3.573 & E / Es & 96.5 & 99.23 & 64.98 & 168.46 & 69.23 \\
+7.074 & E / Es & 100.0 & 34.06 & 26.09 & 43.71 & 9.65 \\
+10.136 & E / Es & 103.0 & 19.71 & 16.43 & 23.70 & 3.99 \\
+14.074 & F1 & 168.5 & 13.91 & 12.29 & 16.68 & 2.77 \\
+21.074 & F2 & 233.0 & 6.29 & 5.38 & 6.52 & 0.23 \\
+\hline
+\end{tabular}
+\end{table}
+
+% ============================================================================
+% Gerçek İrtifa İyonogram Tersinimi (True-Height Inversion foF2, hmF2) Bulguları
+% Breit-Tuve Grubu Gecikmesi h'(f) = h_0 + \int_0^{h_r} \mu'(f, h) dh
+% Jackson (1969) / Tikhonov Regularization
+% ============================================================================
+\begin{table}[htbp]
+\centering
+\caption{Dikey FMCW İyonosond İyonogramından Sayısal Tersinim ile Kestirilen İyonosferik Tepe Parametreleri}
+\begin{tabular}{ccccc}
+\hline
+\textbf{$f_oF2$ (MHz)} & \textbf{$h_mF2$ (km)} & \textbf{$N_mF2$ ($\mathrm{m}^{-3}$)} & \textbf{$\mathrm{TEC}_{\mathrm{bottom}}$ (TECU)} & \textbf{Kalıntı RMS (km)} \\
+\hline
+10.871 & 262.4 & 1.466e+12 & 10.42 & 0.0019 \\
 \hline
 \end{tabular}
 \end{table}

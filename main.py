@@ -14,6 +14,16 @@ import numpy as np
 from iono_sense.pipeline import IonoSensePipeline
 
 
+def non_negative_int(value: str) -> int:
+    try:
+        val = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Seed must be an integer, got '{value}'")
+    if val < 0:
+        raise argparse.ArgumentTypeError(f"Seed must be a non-negative integer, got {val}")
+    return val
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="IONO-SENSE TA7CAE: Çok-Bantlı Fırsatçı İyonosferik Sondaj ve DSP Motoru",
@@ -32,7 +42,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--seed",
-        type=int,
+        type=non_negative_int,
         default=42,
         help="Benchmark modunda kullanılacak deterministik rastgele tohum (Varsayılan: 42)",
     )
@@ -41,6 +51,32 @@ def parse_arguments() -> argparse.Namespace:
         type=str,
         default=None,
         help="Laboratuvar/saha SDR ham I/Q kayıt dosyası (.wav veya binary cf32)",
+    )
+    parser.add_argument(
+        "--invert",
+        action="store_true",
+        default=False,
+        help=(
+            "Gerçek İrtifa Tersinimi (True-Height Inversion):\n"
+            "  FMCW sanal irtifa profilinden (h'-f) gerçek plazma irtifası h(f),\n"
+            "  foF2, hmF2, NmF2 ve alt-tepe TEC değerlerini sayısal olarak hesaplar."
+        ),
+    )
+    parser.add_argument(
+        "--inversion-method",
+        choices=["jackson", "tikhonov"],
+        default="jackson",
+        help=(
+            "Tersinim Çözücü Algoritması:\n"
+            "  jackson  : Jackson (1969) parçalı doğrusal laminasyon matrisi (Varsayılan)\n"
+            "  tikhonov : 2. derece eğrilik regülarizasyonlu En Küçük Kareler çözücüsü"
+        ),
+    )
+    parser.add_argument(
+        "--reg-lambda",
+        type=float,
+        default=0.001,
+        help="Tikhonov regülarizasyon katsayısı lambda (Varsayılan: 0.001)",
     )
     return parser.parse_args()
 
@@ -60,6 +96,10 @@ def main() -> None:
     print(f"  • Alıcı Donanımı     : {meta['rf_hardware']}")
     print(f"  • RF Sinyal Trafiği : {meta['signal_data']}")
     print(f"  • İyonogram Çözücü   : {meta['ionogram_source']}")
+    if args.invert:
+        print(f"  • İyonogram Tersinimi: AKTİF [{args.inversion_method.upper()}] (λ={args.reg_lambda})")
+    else:
+        print("  • İyonogram Tersinimi: DEVRE DIŞI (Sadece sanal irtifa h'(f))")
     print("=" * 96)
 
     # 1. Plazma Katman Zayıflama Analizi
@@ -129,6 +169,24 @@ def main() -> None:
         f"foF2 = {crit['foF2_mhz']:.1f} MHz | fxF2 = {crit['fxF2_mhz']:.1f} MHz"
     )
 
+    # 4.1 Gerçek İrtifa Tersinimi (True-Height Inversion)
+    inversion_res = None
+    if args.invert:
+        inversion_dict = pipeline.run_true_height_inversion(
+            ionogram_data=fmcw_res,
+            method=args.inversion_method,
+            reg_lambda=args.reg_lambda,
+        )
+        inversion_res = inversion_dict["inversion_result"]
+        print(
+            f"\n[4.1] DİKEY İYONOGRAM GERÇEK İRTİFA TERSİNİMİ ({args.inversion_method.upper()} METODU):\n"
+            f"    • Kritik Frekans (foF2)       : {inversion_res.foF2_mhz:.3f} MHz\n"
+            f"    • Tepe İrtifası (hmF2)        : {inversion_res.hmF2_km:.1f} km\n"
+            f"    • Tepe Plazma Yoğunluğu (NmF2): {inversion_res.NmF2_m3:.3e} el/m³\n"
+            f"    • Alt-Tepe TEC (hmF2'ye kadar): {inversion_res.subpeak_tec_tecu:.2f} TECU\n"
+            f"    • Rekonstrüksiyon RMS Hatası  : {inversion_res.residual_rms_km:.4f} km"
+        )
+
     # 5. Haselgrove 2B Işın İzleme (Ray-Tracing) Yelpazesi
     ray_fan = pipeline.run_ray_tracing_fan(freq_mhz=14.074)
     print(
@@ -148,6 +206,7 @@ def main() -> None:
         wspr_analysis=wspr_res,
         ionogram_data=fmcw_res,
         ray_fan=ray_fan,
+        inversion_result=inversion_res,
     )
 
     print("\n" + "=" * 96)
