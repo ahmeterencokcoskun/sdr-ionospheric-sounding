@@ -35,31 +35,3 @@ Kayseri jeomanyetik alanı ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) a
   [DL1VHG], [DN40], [2145 km], [-3.8 dB], [+0.20 Hz/dk], [-0.115 m/s²],
   [JA9HIM], [DL21], [4482 km], [+7.6 dB], [-0.20 Hz/dk], [+0.115 m/s²],
 )
-
-== 4. Breit-Tuve Sanal İrtifadan Gerçek İrtifa Tersinimi (True-Height Inversion)
-FMCW dikey iyonosond sanal irtifa verileri $h'(f)$, Breit-Tuve integral denklemine dayanmaktadır:
-$ h'(f) = h_0 + integral_0^{h_r(f)} mu'(f, f_p(h)) dif h $
-
-Bu Abel-tipi integral denklemi, Jackson (1969) parçalı doğrusal laminasyon matris çekirdeği $M_(i k)$ ve Tikhonov 2. derece ayrık eğrilik regülarizasyon operatörü ($L$) kullanılarak tersinmiştir. Elde edilen tepe parametreleri ve alt-iyonosferik toplam elektron içeriği aşağıda özetlenmiştir:
-
-#table(
-  columns: (auto, auto, auto, auto, auto),
-  align: center,
-  [*foF2 (Kritik Frekans)*], [*hmF2 (Tepe İrtifası)*], [*NmF2 (Elektron Yoğunluğu)*], [*Alt-Tepe TEC*], [*Kalıntı RMS*],
-  [10.871 MHz], [262.4 km], [1.466e+12 el/m³], [10.42 TECU], [0.0019 km],
-)
-
-*Tersinim ile Kestirilen Katman Profili Örneklemleri:*
-#table(
-  columns: (auto, auto, auto),
-  align: center,
-  [*Plazma Frekansı $f_p$*], [*Gerçek İrtifa $h$*], [*Elektron Yoğunluğu $N_e$*],
-  [1.00 MHz], [79.0 km], [1.240e+10 el/m³],
-  [2.41 MHz], [93.2 km], [7.205e+10 el/m³],
-  [3.82 MHz], [98.8 km], [1.810e+11 el/m³],
-  [5.23 MHz], [143.7 km], [3.393e+11 el/m³],
-  [6.64 MHz], [195.2 km], [5.470e+11 el/m³],
-  [8.05 MHz], [212.6 km], [8.039e+11 el/m³],
-  [9.46 MHz], [230.4 km], [1.110e+12 el/m³],
-  [10.87 MHz], [262.4 km], [1.466e+12 el/m³],
-)
