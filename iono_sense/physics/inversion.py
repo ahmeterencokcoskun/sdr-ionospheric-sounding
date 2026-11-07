@@ -1,4 +1,4 @@
-"""Gerçek İrtifa İyonogram Tersinim Motoru (Jackson Laminasyon & Tikhonov Regülarizasyonu)."""
+"""True-Height Ionogram Inversion Engine (Jackson Lamination & Tikhonov Regularization)."""
 
 from dataclasses import dataclass
 from typing import Optional, Tuple
@@ -21,7 +21,7 @@ class InversionResult:
 
 
 class IonogramTrueHeightInverter:
-    """Sanal irtifa h'(f) verisinden gerçek irtifa h(f_N) ve elektron yoğunluğu Ne(h) çözer."""
+    """Solves true height h(f_N) and electron density Ne(h) from virtual height h'(f) profiles."""
 
     def __init__(self, default_h0_km: float = 60.0):
         self.default_h0_km = float(default_h0_km)
@@ -51,7 +51,7 @@ class IonogramTrueHeightInverter:
 
     @staticmethod
     def build_jackson_kernel(freqs_mhz: np.ndarray) -> np.ndarray:
-        """Jackson (1969) alt-üçgensel parçalı doğrusal laminasyon matrisi M[i, k]."""
+        """Jackson (1969) lower-triangular piecewise linear lamination matrix M[i, k]."""
         N = len(freqs_mhz)
         M = np.zeros((N, N), dtype=np.float64)
         f_steps = np.concatenate([[0.0], freqs_mhz])
@@ -141,7 +141,7 @@ class IonogramTrueHeightInverter:
     def convert_oblique_to_vertical(
         self, f_oblique_mhz: float, delay_ms: float, distance_km: float
     ) -> Tuple[float, float]:
-        """Martyn eşdeğer yol teoremi ile eğik yayılımı dikey eşdeğere (f_v, h'_v) dönüştürür."""
+        """Transforms oblique propagation to vertical equivalent (f_v, h'_v) using Martyn equivalent path theorem."""
         if (
             not (np.isfinite(f_oblique_mhz) and np.isfinite(delay_ms) and np.isfinite(distance_km))
             or f_oblique_mhz <= 0.0

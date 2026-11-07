@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Uçtan Uca İyonosferik Algılama ve DSP Orkestrasyon Hattı (Pipeline)."""
+"""End-to-End Ionospheric Sensing and DSP Orchestration Pipeline."""
 
 from typing import Any, Dict, List, Optional
 import numpy as np
@@ -16,9 +16,8 @@ from iono_sense.reporting.document_exporter import AcademicReportExporter
 from iono_sense.simulation.fmcw_sounder import FMCWIonosondeSimulator
 from iono_sense.simulation.watterson import WattersonChannelSimulator
 
-
 class IonoSensePipeline:
-    """Çok-Bantlı Fırsatçı İyonosferik Sondaj ve Analiz Hattı."""
+    """Multi-Band Opportunistic Ionospheric Sounding and Analysis Pipeline."""
 
     def __init__(
         self,
@@ -51,34 +50,34 @@ class IonoSensePipeline:
     def get_execution_metadata(self) -> Dict[str, str]:
         if self.iq_file:
             return {
-                "mode_title": "DOSYA TABANLI GERÇEK I/Q OYNATMA",
-                "weather_source": "CANLI / STATİK ENTEGRASYON",
+                "mode_title": "FILE-BASED REAL I/Q PLAYBACK",
+                "weather_source": "LIVE / STATIC INTEGRATION",
                 "rf_hardware": f"I/Q FILE PLAYBACK ({self.iq_file})",
-                "signal_data": "LABORATUVAR / SAHA SDR KAYDI",
-                "ionogram_source": "FİZİKSEL MODEL (Breit-Tuve Grup İndisi + Range-FFT AWGN)",
+                "signal_data": "LABORATORY / FIELD SDR RECORDING",
+                "ionogram_source": "PHYSICAL MODEL (Breit-Tuve Group Index + Range-FFT AWGN)",
             }
         if self.mode == "live":
             return {
-                "mode_title": "CANLI / LIVE HİBRİT",
-                "weather_source": "GERÇEK ZAMANLI (NOAA SWPC API - services.swpc.noaa.gov)",
-                "rf_hardware": "DUMMY LOAD / BENZETİMLİ SDR (RSPdx Emülatörü)",
-                "signal_data": "DİNAMİK STOKASTİK (Rastgele Çok-Yollu HF Trafiği)",
-                "ionogram_source": "FİZİKSEL MODEL (Breit-Tuve Grup İndisi + Range-FFT AWGN)",
+                "mode_title": "LIVE / HYBRID",
+                "weather_source": "REAL-TIME (NOAA SWPC API - services.swpc.noaa.gov)",
+                "rf_hardware": "DUMMY LOAD / SIMULATED SDR (RSPdx Emulator)",
+                "signal_data": "DYNAMIC STOCHASTIC (Random Multi-Path HF Traffic)",
+                "ionogram_source": "PHYSICAL MODEL (Breit-Tuve Group Index + Range-FFT AWGN)",
             }
         if self.mode == "sim":
             return {
-                "mode_title": "TAM STOKASTİK SİMÜLASYON",
-                "weather_source": "STOKASTİK SİMÜLASYON (Dinamik Güneş/Manyetik Alan)",
-                "rf_hardware": "DUMMY LOAD / BENZETİMLİ SDR",
-                "signal_data": "STOKASTİK SENTETİK (Rastgele İstasyonlar & Fading)",
-                "ionogram_source": "FİZİKSEL MODEL (Breit-Tuve Grup İndisi + Range-FFT AWGN)",
+                "mode_title": "FULL STOCHASTIC SIMULATION",
+                "weather_source": "STOCHASTIC SIMULATION (Dynamic Solar/Magnetic Field)",
+                "rf_hardware": "DUMMY LOAD / SIMULATED SDR",
+                "signal_data": "STOCHASTIC SYNTHETIC (Random Stations & Fading)",
+                "ionogram_source": "PHYSICAL MODEL (Breit-Tuve Group Index + Range-FFT AWGN)",
             }
         return {
-            "mode_title": "STATİK BENCHMARK TESTİ (TEKRARLANABİLİR)",
-            "weather_source": "SABİT REFERANS VERİ (N0NBH Standart Günü)",
-            "rf_hardware": "DUMMY LOAD / BENZETİMLİ SDR",
-            "signal_data": f"SABİT DETERMINİSTİK KANAL (Seed: {self.seed})",
-            "ionogram_source": "FİZİKSEL MODEL (Deterministik Breit-Tuve)",
+            "mode_title": "STATIC BENCHMARK TEST (REPRODUCIBLE)",
+            "weather_source": "FIXED REFERENCE DATA (N0NBH Standard Day)",
+            "rf_hardware": "DUMMY LOAD / SIMULATED SDR",
+            "signal_data": f"FIXED DETERMINISTIC CHANNEL (Seed: {self.seed})",
+            "ionogram_source": "PHYSICAL MODEL (Deterministic Breit-Tuve)",
         }
 
     def run_plasma_attenuation_analysis(self, freqs: Optional[List[float]] = None) -> List[Dict]:
@@ -117,10 +116,19 @@ class IonoSensePipeline:
             else self.watterson_sim.simulate_band_frame(band_mhz=freq_mhz)
         )
 
-        raw_metrics = [
-            self.dsp_core.estimate_station_parameters(frame_20m["iq_buffer"], gt, f_carrier_mhz=freq_mhz)
-            for gt in frame_20m.get("ground_truth", [])
-        ]
+        gt_list = frame_20m.get("ground_truth", [])
+        if gt_list:
+            raw_metrics = [
+                self.dsp_core.estimate_station_parameters(
+                    frame_20m["iq_buffer"], gt, f_carrier_mhz=freq_mhz
+                )
+                for gt in gt_list
+            ]
+        else:
+            raw_metrics = self.dsp_core.blind_scan_and_extract(
+                frame_20m["iq_buffer"], f_carrier_mhz=freq_mhz
+            )
+
         tcxo_est_hz, calibrated_stations = self.dsp_core.calibrate_and_extract_doppler(raw_metrics)
 
         for st_m in calibrated_stations:
@@ -162,13 +170,57 @@ class IonoSensePipeline:
         }
 
     def run_wspr_drift_analysis(self, freq_mhz: float = 14.0956) -> Dict:
+        if self.iq_file:
+            frame = self.sdr_controller.capture_slot(freq_mhz=freq_mhz)
+            raw_stations = self.dsp_core.blind_scan_and_extract(
+                frame["iq_buffer"], f_carrier_mhz=freq_mhz
+            )
+            c_mps = 2.99792458e8
+            fc_hz = freq_mhz * 1e6
+            cos_theta = float(np.cos(np.radians(72.0)))
+            results = []
+            for st in raw_stations:
+                t_s = st["t_sig"]
+                phi_u = st["phi_unwrapped"]
+                # 2. dereceden faz polinomu: phi(t) = a2*t^2 + a1*t + a0 -> df/dt = a2/pi (Hz/s)
+                poly2 = np.polyfit(t_s, phi_u, deg=2)
+                drift_hz_min = float((poly2[0] / np.pi) * 60.0)
+                results.append({
+                    "callsign": st["callsign"],
+                    "grid": "WAV",
+                    "distance_km": st["distance_km"],
+                    "snr_db": st["snr_db"],
+                    "true_drift_hz_min": 0.0,
+                    "total_drift_hz_min": drift_hz_min,
+                    "meas_drift_hz_min": drift_hz_min,
+                })
+            est_drift_slope = (
+                float(np.median([r["meas_drift_hz_min"] for r in results]))
+                if results
+                else 0.0
+            )
+            for r in results:
+                net_d = r["meas_drift_hz_min"] - est_drift_slope
+                r["net_iono_drift_hz_min"] = net_d
+                r["layer_accel_mps2"] = -(c_mps / (2.0 * fc_hz * cos_theta)) * (
+                    net_d / 60.0
+                )
+            return {
+                "wspr_slot": {"tcxo_drift_slope_hz_min": 0.0},
+                "est_drift_slope": est_drift_slope,
+                "wspr_results": results,
+            }
+
         wspr_slot = self.watterson_sim.simulate_wspr_slot(band_mhz=freq_mhz)
-        est_drift_slope, wspr_results = self.dsp_core.analyze_wspr_signals(wspr_slot, f_carrier_mhz=freq_mhz)
+        est_drift_slope, wspr_results = self.dsp_core.analyze_wspr_signals(
+            wspr_slot, f_carrier_mhz=freq_mhz
+        )
         return {
             "wspr_slot": wspr_slot,
             "est_drift_slope": est_drift_slope,
             "wspr_results": wspr_results,
         }
+
 
     def run_fmcw_ionosonde_sweep(self) -> Dict:
         return self.fmcw_sim.synthesize_ionogram_profile()
@@ -239,8 +291,8 @@ class IonoSensePipeline:
         ray_fan: Optional[List] = None,
         png_path: str = "iono_sense_dashboard.png",
         pdf_path: str = "iono_sense_dashboard.pdf",
-        typst_path: str = "tez_bulgulari.typ",
-        latex_path: str = "tez_bulgulari.tex",
+        typst_path: str = "thesis_findings.typ",
+        latex_path: str = "thesis_findings.tex",
         inversion_result: Optional[Any] = None,
     ) -> None:
         self.plotter.plot_dashboard(
@@ -270,3 +322,5 @@ class IonoSensePipeline:
             filepath=latex_path,
             inversion_result=inversion_result,
         )
+
+        

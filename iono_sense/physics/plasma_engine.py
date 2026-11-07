@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""İyonosferik Plazma Fiziği ve Küresel Magneto-İyonik Zayıflama Motoru."""
+"""Ionospheric Plasma Physics and Spherical Magneto-Ionic Attenuation Engine."""
 
 from dataclasses import dataclass
 from typing import Dict, Optional
@@ -24,7 +24,7 @@ class StationGeoConfig:
 
 
 class IonosphericPlasmaEngine:
-    """Küresel Snell yasası, irtifaya bağlı B(h), Te(h), H(h) ve Haselgrove yol çözücüsü."""
+    """Spherical Snell law, altitude-dependent B(h), Te(h), H(h), and Haselgrove ray path solver."""
 
     def __init__(self, config: Optional[StationGeoConfig] = None, is_daytime: bool = True):
         self.cfg = config or StationGeoConfig()
@@ -120,7 +120,7 @@ class IonosphericPlasmaEngine:
             penetrates = True
             h_max_idx = len(self.h_km) - 1
             refl_height_km = float("nan")
-            layer_name = "UZAYA KAÇIŞ"
+            layer_name = "ESCAPE TO SPACE"
             hop_dist_km = float("nan")
         else:
             penetrates = False

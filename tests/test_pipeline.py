@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""IONO-SENSE TA7CAE — Birim ve Entegrasyon Test Süiti."""
+"""IONO-SENSE TA7CAE — Unit and Integration Test Suite."""
 
 import numpy as np
 
@@ -9,7 +9,7 @@ from iono_sense.hardware.file_playback import IQFilePlaybackHardware
 from iono_sense.physics.inversion import IonogramTrueHeightInverter
 from iono_sense.physics.plasma_engine import IonosphericPlasmaEngine
 from iono_sense.physics.ray_tracer import HaselgroveRayTracer
-from iono_sense.pipeline import IonoSensePipeline
+from iono_sense.iono_sense import IonoSensePipeline
 from iono_sense.simulation.fmcw_sounder import FMCWIonosondeSimulator
 from iono_sense.simulation.watterson import WattersonChannelSimulator
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""6 Panelli Akademik Araştırma Gösterge Paneli Çizicisi."""
+"""6 Panelli Akademik Arastirma Gosterge Paneli Cizicisi."""
 
 from typing import Any, Dict, List, Optional
 import matplotlib
@@ -16,7 +16,7 @@ def _extract_inv_attr(inv: Any, key: str, default: Any = 0.0) -> Any:
 
 
 class AcademicDashboardPlotter:
-    """6 panelli vektörel analiz gösterge paneli üreticisi."""
+    """6 panelli vektorel analiz gosterge paneli ureticisi."""
 
     def __init__(self, figsize: tuple = (18, 11.5), dpi: int = 160, dark_mode: bool = True):
         self.figsize = figsize
@@ -34,7 +34,7 @@ class AcademicDashboardPlotter:
         heights = ionogram_data["heights_km"]
         im = ax.pcolormesh(freqs, heights, ionogram_data["ionogram_db"], shading="auto", cmap="inferno", zorder=1)
         if fig is not None:
-            fig.colorbar(im, ax=ax, label="Yankı Gücü (dB)")
+            fig.colorbar(im, ax=ax, label="Echo Power (dB)")
 
         crit = ionogram_data.get("critical_frequencies", {})
         foE = crit.get("foE_mhz", 3.4)
@@ -53,7 +53,7 @@ class AcademicDashboardPlotter:
                 inv_tec = float(_extract_inv_attr(inv, "subpeak_tec_tecu"))
                 inv_rms = float(_extract_inv_attr(inv, "residual_rms_km"))
 
-                ax.plot(inv_f, inv_h, color="#00ff9d", lw=2.2, ls="-", label="Gerçek İrtifa h(f)", zorder=5)
+                ax.plot(inv_f, inv_h, color="#00ff9d", lw=2.2, ls="-", label="True Height h(f)", zorder=5)
                 ax.plot(
                     inv_foF2, inv_hmF2, marker="*", markersize=9, color="#ffff00",
                     ls="", label=f"hmF2: {inv_hmF2:.1f} km", zorder=6,
@@ -72,13 +72,13 @@ class AcademicDashboardPlotter:
                 )
 
         title_str = (
-            "3. Dikey FMCW İyonogramı & Gerçek İrtifa Tersinimi"
+            "3. Vertical FMCW Ionogram & True-Height Inversion"
             if inv is not None
-            else "3. Dikey FMCW İyonogramı [Breit-Tuve h'(f)]"
+            else "3. Vertical FMCW Ionogram [Breit-Tuve h'(f)]"
         )
         ax.set_title(title_str, fontsize=10.5, color="#e0e0e0")
-        ax.set_xlabel("Sondaj Frekansı (MHz)")
-        ax.set_ylabel("İrtifa / Sanal Yükseklik h, h' (km)")
+        ax.set_xlabel("Sounding Frequency (MHz)")
+        ax.set_ylabel("Height / Virtual Height h, h' (km)")
         ax.set_ylim(heights[0], heights[-1])
         ax.grid(True, alpha=0.25)
         ax.legend(loc="upper left", fontsize=7.5)
@@ -103,7 +103,7 @@ class AcademicDashboardPlotter:
 
         fig, axes = plt.subplots(2, 3, figsize=self.figsize, dpi=self.dpi)
         fig.suptitle(
-            "IONO-SENSE TA7CAE: Çok-Bantlı Fırsatçı İyonosferik Sondaj ve Plazma Analiz Paneli\n"
+            "IONO-SENSE TA7CAE: Multi-Band Opportunistic Ionospheric Sounding & Plasma Analysis Dashboard\n"
             f"QTH: Kayseri / Talas (38.6875°N, 35.5555°E - KM78sq) | SFI: {sw_data['SFI']:.0f} | "
             f"Kp: {sw_data['Kp']:.0f} | IMF Bz: {sw_data['Bz_nT']:+.1f} nT",
             fontsize=13,
@@ -112,11 +112,11 @@ class AcademicDashboardPlotter:
         )
 
         ax1 = axes[0, 0]
-        ax1.plot(plasma_day.fp_hz / 1e6, plasma_day.h_km, color="#00ff9d", lw=2.2, label="Gündüz (D, E, F1, F2)")
-        ax1.plot(plasma_night.fp_hz / 1e6, plasma_night.h_km, color="#ff9100", lw=2.0, ls="--", label="Gece (Birleşik F)")
-        ax1.set_title("1. İyonosferik Plazma Frekansı Profili fp(h)", fontsize=10.5, color="#e0e0e0")
-        ax1.set_xlabel("Plazma Frekansı fp (MHz)")
-        ax1.set_ylabel("İrtifa h (km)")
+        ax1.plot(plasma_day.fp_hz / 1e6, plasma_day.h_km, color="#00ff9d", lw=2.2, label="Daytime (D, E, F1, F2)")
+        ax1.plot(plasma_night.fp_hz / 1e6, plasma_night.h_km, color="#ff9100", lw=2.0, ls="--", label="Nighttime (Merged F)")
+        ax1.set_title("1. Ionospheric Plasma Frequency Profile fp(h)", fontsize=10.5, color="#e0e0e0")
+        ax1.set_xlabel("Plasma Frequency fp (MHz)")
+        ax1.set_ylabel("Height h (km)")
         ax1.grid(True, alpha=0.25)
         ax1.legend(loc="lower right", fontsize=8.5)
 
@@ -124,15 +124,15 @@ class AcademicDashboardPlotter:
         valid_r = [r for r in plasma_results if not r.get("penetrates", False)]
         x_pos = np.arange(len(valid_r))
         w = 0.25
-        ax2.bar(x_pos - w, [r["loss_approx_db"] for r in valid_r], width=w, color="#2979ff", label="Basit 1/f²")
-        ax2.bar(x_pos, [r["loss_sen_wyller_db"] for r in valid_r], width=w, color="#00e676", label="Tam O-Modu (Sen-Wyller)")
-        ax2.bar(x_pos + w, [r["loss_X_db"] for r in valid_r], width=w, color="#ff1744", label="Tam X-Modu")
+        ax2.bar(x_pos - w, [r["loss_approx_db"] for r in valid_r], width=w, color="#2979ff", label="Simple 1/f²")
+        ax2.bar(x_pos, [r["loss_sen_wyller_db"] for r in valid_r], width=w, color="#00e676", label="Full O-Mode (Sen-Wyller)")
+        ax2.bar(x_pos + w, [r["loss_X_db"] for r in valid_r], width=w, color="#ff1744", label="Full X-Mode")
         ax2.set_xticks(x_pos)
         ax2.set_xticklabels([f"{r['freq_mhz']:.1f}" for r in valid_r])
         ax2.set_yscale("log")
-        ax2.set_title("2. Magneto-İyonik Zayıflama Hata Bütçesi (dB)", fontsize=10.5, color="#e0e0e0")
-        ax2.set_xlabel("Taşıyıcı Frekans (MHz)")
-        ax2.set_ylabel("İki Yönlü Emilim Kaybı (dB)")
+        ax2.set_title("2. Magneto-Ionic Attenuation Error Budget (dB)", fontsize=10.5, color="#e0e0e0")
+        ax2.set_xlabel("Carrier Frequency (MHz)")
+        ax2.set_ylabel("Two-Way Absorption Loss (dB)")
         ax2.grid(True, alpha=0.25, which="both")
         ax2.legend(fontsize=8)
 
@@ -145,22 +145,22 @@ class AcademicDashboardPlotter:
             ax3.pcolormesh(
                 f_spec[mask_f], t_spec, 10.0 * np.log10(np.abs(Sxx[mask_f, :]).T + 1e-12), shading="auto", cmap="inferno"
             )
-            ax3.set_title("3. 14.074 MHz FT8 Taban Bant Spektrogramı", fontsize=10.5, color="#e0e0e0")
-            ax3.set_xlabel("Frekans (Hz)")
-            ax3.set_ylabel("Zaman (s)")
+            ax3.set_title("3. 14.074 MHz FT8 Baseband Spectrogram", fontsize=10.5, color="#e0e0e0")
+            ax3.set_xlabel("Frequency (Hz)")
+            ax3.set_ylabel("Time (s)")
 
         ax4 = axes[1, 0]
         if calibrated_stations:
             st = calibrated_stations[0]
             sl = slice(8000, -8000) if len(st["t_sig"]) > 16000 else slice(None)
-            ax4.plot(st["t_sig"][sl], st["inst_doppler_true"][sl], color="#ffffff", lw=2.0, ls="--", label="Gerçek TID Doppler")
-            ax4.plot(st["t_sig"][sl], st["fd_est"][sl], color="#00e5ff", lw=1.8, label=f"Kestirilen [{st['callsign']}]")
+            ax4.plot(st["t_sig"][sl], st["inst_doppler_true"][sl], color="#ffffff", lw=2.0, ls="--", label="True TID Doppler")
+            ax4.plot(st["t_sig"][sl], st["fd_est"][sl], color="#00e5ff", lw=1.8, label=f"Estimated [{st['callsign']}]")
             ax4.legend(fontsize=8.5)
         else:
-            ax4.text(0.5, 0.5, "İstasyon Verisi Yok", transform=ax4.transAxes, ha="center", va="center", color="#888888")
-        ax4.set_title("4. Alt-Paketsel Mikro-Doppler Yörüngesi fd(t)", fontsize=10.5, color="#e0e0e0")
-        ax4.set_xlabel("Paket İçi Zaman (s)")
-        ax4.set_ylabel("Doppler Kayması (Hz)")
+            ax4.text(0.5, 0.5, "No Station Data Available", transform=ax4.transAxes, ha="center", va="center", color="#888888")
+        ax4.set_title("4. Sub-Packet Micro-Doppler Trajectory fd(t)", fontsize=10.5, color="#e0e0e0")
+        ax4.set_xlabel("Paket Ici Time (s)")
+        ax4.set_ylabel("Doppler Shift (Hz)")
         ax4.grid(True, alpha=0.25)
 
         ax5 = axes[1, 1]
@@ -168,13 +168,13 @@ class AcademicDashboardPlotter:
             for ray in ray_fan:
                 ax5.plot(
                     ray.ground_dist_km, ray.h_km, lw=1.8,
-                    label=f"Δ={ray.elevation_deg:.0f}° ({'Yansıdı' if ray.reflected else 'Kaçtı'})",
+                    label=f"Δ={ray.elevation_deg:.0f}° ({'Reflected' if ray.reflected else 'Escaped'})",
                 )
-            ax5.axhline(110.0, color="#76ff03", ls=":", alpha=0.6, label="E Katmanı")
-            ax5.axhline(290.0, color="#ff3d00", ls=":", alpha=0.6, label="F2 Katmanı")
-            ax5.set_title("5. 2B Haselgrove Işın İzleme (14 MHz Ray-Fan)", fontsize=10.5, color="#e0e0e0")
-            ax5.set_xlabel("Yer Mesafesi (km)")
-            ax5.set_ylabel("İrtifa (km)")
+            ax5.axhline(110.0, color="#76ff03", ls=":", alpha=0.6, label="E Layer")
+            ax5.axhline(290.0, color="#ff3d00", ls=":", alpha=0.6, label="F2 Layer")
+            ax5.set_title("5. 2D Haselgrove Ray Tracing (14 MHz Ray-Fan)", fontsize=10.5, color="#e0e0e0")
+            ax5.set_xlabel("Ground Distance (km)")
+            ax5.set_ylabel("Height (km)")
             ax5.set_ylim(0, 420)
             ax5.grid(True, alpha=0.25)
             ax5.legend(fontsize=7.5, loc="upper right")
@@ -182,9 +182,9 @@ class AcademicDashboardPlotter:
             z_in = calibrated_stations[0]["z_smooth"] if calibrated_stations else None
             tau_ms, fd_grid, S_db = dsp_core.compute_scattering_function(z_in)
             ax5.contourf(tau_ms, fd_grid, S_db, levels=24, cmap="viridis")
-            ax5.set_title("5. Kanal Saçılma Fonksiyonu S(τ, fd)", fontsize=10.5, color="#e0e0e0")
-            ax5.set_xlabel("Grup Gecikmesi τ (ms)")
-            ax5.set_ylabel("Doppler Frekansı fd (Hz)")
+            ax5.set_title("5. Channel Scattering Function S(tau, fd)", fontsize=10.5, color="#e0e0e0")
+            ax5.set_xlabel("Group Delay tau (ms)")
+            ax5.set_ylabel("Doppler Frequency fd (Hz)")
 
         ax6 = axes[1, 2]
         ber = dsp_core.compute_multimode_ber_curves()
@@ -195,11 +195,11 @@ class AcademicDashboardPlotter:
         ax6.scatter(
             [s["snr_db"] + 6.0 for s in calibrated_stations],
             [max(s["pre_fec_ber"], 1e-4) for s in calibrated_stations],
-            color="#ffffff", edgecolor="#ff1744", s=55, zorder=5, label="Ölçülen Pre-FEC BER",
+            color="#ffffff", edgecolor="#ff1744", s=55, zorder=5, label="Measured Pre-FEC BER",
         )
-        ax6.set_title("6. İyonosferik Modların BER Karşılaştırması", fontsize=10.5, color="#e0e0e0")
+        ax6.set_title("6. Ionospheric Modes BER Comparison", fontsize=10.5, color="#e0e0e0")
         ax6.set_xlabel("Eb/N0 (dB)")
-        ax6.set_ylabel("Bit Hata Oranı (BER)")
+        ax6.set_ylabel("Bit Error Rate (BER)")
         ax6.set_ylim(1e-5, 0.5)
         ax6.grid(True, alpha=0.25, which="both")
         ax6.legend(fontsize=8, loc="lower left")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""2B Haselgrove Küresel Sayısal Işın İzleyici (RK4 Ray-Tracer)."""
+"""2D Haselgrove Spherical Numerical Ray Tracer (RK4 Ray-Tracer)."""
 
 from dataclasses import dataclass
 from typing import List, Tuple
@@ -25,7 +25,7 @@ class RayTrajectory:
 
 
 class HaselgroveRayTracer:
-    """Küresel koordinatlarda (r, theta) Haselgrove 2B diferansiyel ışın denklemlerini çözer."""
+    """Solves Haselgrove 2D differential ray equations in spherical coordinates (r, theta)."""
 
     def __init__(self, plasma_engine: IonosphericPlasmaEngine):
         self.plasma = plasma_engine

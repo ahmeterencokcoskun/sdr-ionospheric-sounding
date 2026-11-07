@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fiziksel Dikey FMCW İyonosond Radarı ve Breit-Tuve İyonogram Çözücüsü."""
+"""Physical Vertical FMCW Ionosonde Radar and Breit-Tuve Ionogram Engine."""
 
 from typing import Dict, Optional
 import numpy as np
@@ -8,7 +8,7 @@ from iono_sense.physics.plasma_engine import IonosphericPlasmaEngine, integrate_
 
 
 class FMCWIonosondeSimulator:
-    """Breit-Tuve grup indisi integrasyonu ve Range-FFT spektrumu ile dikey iyonosond simülatörü."""
+    """Vertical ionosonde simulator with Breit-Tuve group index integration and Range-FFT spectrum."""
 
     def __init__(
         self,

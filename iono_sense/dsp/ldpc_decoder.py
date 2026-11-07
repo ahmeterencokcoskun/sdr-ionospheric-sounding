@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""FT8 Standardı LDPC(174,91) Normalized Min-Sum LLR Kod Çözücüsü."""
+"""FT8 Standard LDPC(174,91) Normalized Min-Sum LLR Decoder."""
 
 from typing import Tuple
 import numpy as np
 
 
 class FT8LDPCDecoder:
-    """Normalized Min-Sum / Log-Likelihood Ratio (LLR) tabanlı LDPC(174,91) kod çözücü."""
+    """Normalized Min-Sum / Log-Likelihood Ratio (LLR) based LDPC(174,91) decoder."""
 
     def __init__(self, max_iterations: int = 25, norm_factor: float = 0.75):
         self.n_bits = 174

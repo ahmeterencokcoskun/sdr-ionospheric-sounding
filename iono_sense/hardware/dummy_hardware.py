@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benzetimli SDR Donanım Katmanı (DummyLoadHardware) ve Canlı NOAA SWPC Uzay Havası İstemcisi."""
+"""Simulated SDR Hardware Layer (DummyLoadHardware) and Live NOAA SWPC Space Weather Client."""
 
 import sqlite3
 import urllib.request
@@ -11,10 +11,10 @@ from iono_sense.simulation.watterson import WattersonChannelSimulator
 
 
 BAND_HOPPING_SCHEDULE = [
-    {"slot": 0, "sec": ":00", "band": "80m", "freq_mhz": 3.573, "target_layer": "D & E Katmanı"},
+    {"slot": 0, "sec": ":00", "band": "80m", "freq_mhz": 3.573, "target_layer": "D & E Layer"},
     {"slot": 1, "sec": ":15", "band": "40m", "freq_mhz": 7.074, "target_layer": "F1 & NVIS"},
     {"slot": 2, "sec": ":30", "band": "20m", "freq_mhz": 14.074, "target_layer": "F2 Ana DX & TID"},
-    {"slot": 3, "sec": ":45", "band": "10m", "freq_mhz": 28.074, "target_layer": "MUF Sınırı & Es"},
+    {"slot": 3, "sec": ":45", "band": "10m", "freq_mhz": 28.074, "target_layer": "MUF Limit & Es"},
 ]
 
 
@@ -25,7 +25,7 @@ def _get_field(obj: Any, name: str, default: float = 0.0) -> float:
 
 
 class DummyLoadHardware:
-    """SDR donanım benzetimi, SQLite telemetri kaydedicisi ve canlı NOAA SWPC veri çözücüsü."""
+    """SDR hardware simulation, SQLite telemetry logger, and live NOAA SWPC data parser."""
 
     def __init__(self, fs: float = 12000.0, db_path: str = "iono_telemetry_ta7cae.db"):
         self.fs = fs

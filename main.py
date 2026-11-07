@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""IONO-SENSE TA7CAE — Ana Komuta ve Yürütücü Konsolu (CLI Orchestrator)."""
+"""IONO-SENSE TA7CAE — Main Command & Executive Console (CLI Orchestrator)."""
 
 import argparse
 import numpy as np
-
-from iono_sense.pipeline import IonoSensePipeline
-
+from iono_sense.iono_sense import IonoSensePipeline
 
 def non_negative_int(value: str) -> int:
     try:
@@ -19,25 +17,25 @@ def non_negative_int(value: str) -> int:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="IONO-SENSE TA7CAE: Çok-Bantlı Fırsatçı İyonosferik Sondaj ve DSP Motoru",
+        description="IONO-SENSE TA7CAE: Multi-Band Opportunistic Ionospheric Sounding & DSP Engine",
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument(
         "--mode",
         choices=["live", "sim", "benchmark"],
         default="live",
-        help="Çalışma modu: live (NOAA SWPC + stokastik RF), sim (tam simülasyon), benchmark (sabit tohumlu)",
+        help="Operation mode: live (NOAA SWPC + stochastic RF), sim (full simulation), benchmark (fixed seed)",
     )
-    parser.add_argument("--seed", type=non_negative_int, default=42, help="Benchmark rastgele tohumu (Varsayılan: 42)")
-    parser.add_argument("--iq-file", type=str, default=None, help="SDR ham I/Q kayıt dosyası (.wav veya .cf32)")
-    parser.add_argument("--invert", action="store_true", default=False, help="Gerçek irtifa tersinimi h(f) hesapla")
+    parser.add_argument("--seed", type=non_negative_int, default=42, help="Benchmark random seed (Default: 42)")
+    parser.add_argument("--iq-file", type=str, default=None, help="SDR raw I/Q recording file (.wav or .cf32)")
+    parser.add_argument("--invert", action="store_true", default=False, help="Compute true height inversion h(f)")
     parser.add_argument(
         "--inversion-method",
         choices=["jackson", "tikhonov"],
         default="jackson",
-        help="Tersinim çözücü algoritması: jackson veya tikhonov (Varsayılan: jackson)",
+        help="Inversion solver algorithm: jackson or tikhonov (Default: jackson)",
     )
-    parser.add_argument("--reg-lambda", type=float, default=0.001, help="Tikhonov regülarizasyon katsayısı (0.001)")
+    parser.add_argument("--reg-lambda", type=float, default=0.001, help="Tikhonov regularization coefficient (0.001)")
     return parser.parse_args()
 
 
@@ -47,31 +45,31 @@ def main() -> None:
     meta = pipeline.get_execution_metadata()
 
     print("=" * 96)
-    print(" IONO-SENSE TA7CAE // ÇOK-BANTLI FIRSATÇI İYONOSFERİK SONDAJ VE DSP MOTORU")
-    print(" QTH: Kayseri / Talas (38.6875°N, 35.5555°E - KM78sq) | Operatör: TA7CAE")
+    print(" IONO-SENSE TA7CAE // MULTI-BAND OPPORTUNISTIC IONOSPHERIC SOUNDING & DSP ENGINE")
+    print(" QTH: Kayseri / Talas (38.6875°N, 35.5555°E - KM78sq) | Operator: TA7CAE")
     print("-" * 96)
-    print(f" ÇALIŞMA MODU         : [{meta['mode_title']}]")
-    print(f"  • Uzay Havası Verisi: {meta['weather_source']}")
-    print(f"  • Alıcı Donanımı     : {meta['rf_hardware']}")
-    print(f"  • RF Sinyal Trafiği : {meta['signal_data']}")
-    print(f"  • İyonogram Çözücü   : {meta['ionogram_source']}")
+    print(f" OPERATION MODE      : [{meta['mode_title']}]")
+    print(f"  • Space Weather Data : {meta['weather_source']}")
+    print(f"  • Receiver Hardware  : {meta['rf_hardware']}")
+    print(f"  • RF Signal Traffic  : {meta['signal_data']}")
+    print(f"  • Ionogram Resolver  : {meta['ionogram_source']}")
     if args.invert:
-        print(f"  • İyonogram Tersinimi: AKTİF [{args.inversion_method.upper()}] (λ={args.reg_lambda})")
+        print(f"  • Ionogram Inversion : ACTIVE [{args.inversion_method.upper()}] (λ={args.reg_lambda})")
     else:
-        print("  • İyonogram Tersinimi: DEVRE DIŞI (Sadece sanal irtifa h'(f))")
+        print("  • Ionogram Inversion : DISABLED (Virtual height h'(f) only)")
     print("=" * 96)
 
     plasma_results = pipeline.run_plasma_attenuation_analysis()
-    print("\n[1] PLAZMA KATMAN ETKİLEŞİMİ VE APPLETON-HARTREE ZAYIFLAMA (ALPHA) HATA BÜTÇESİ:")
+    print("\n[1] PLASMA LAYER INTERACTION AND APPLETON-HARTREE ATTENUATION (ALPHA) ERROR BUDGET:")
     print(
-        f"{'Taşıyıcı':<10} | {'Katman':<11} | {'Yansıma':<9} | {'Basit 1/f^2':<12} | "
-        f"{'Tam O-Modu':<11} | {'Tam X-Modu':<11} | {'Model Hatası'}"
+        f"{'Carrier':<10} | {'Layer':<11} | {'Reflection':<11} | {'Simple 1/f^2':<12} | "
+        f"{'Full O-Mode':<11} | {'Full X-Mode':<11} | {'Model Error'}"
     )
     print("-" * 96)
     for r in plasma_results:
-        h_str = f"{r['refl_height_km']:>5.1f} km" if not np.isnan(r.get("refl_height_km", np.nan)) else "  ---   "
+        h_str = f"{r['refl_height_km']:>5.1f} km" if not np.isnan(r.get("refl_height_km", np.nan)) else "   ---    "
         print(
-            f"{r['freq_mhz']:>6.3f} MHz | {r['layer']:<11} | {h_str:<9} | "
+            f"{r['freq_mhz']:>6.3f} MHz | {r['layer']:<11} | {h_str:<11} | "
             f"{r['loss_approx_db']:>9.2f} dB | {r['loss_O_db']:>8.2f} dB | "
             f"{r['loss_X_db']:>8.2f} dB | {r['discrepancy_X_db']:>8.2f} dB"
         )
@@ -79,14 +77,14 @@ def main() -> None:
     ft8_res = pipeline.run_ft8_micro_doppler_analysis(freq_mhz=14.074)
     sw = ft8_res["sw_data"]
     print(
-        f"\n[2] 14.074 MHz (20m F2 KATMANI) FT8 ÇÖZÜMLEME VE ORTAK-MOD TCXO KALİBRASYONU:\n"
-        f"    Uzay Havası: SFI={sw['SFI']:.1f}, Kp={sw['Kp']:.1f}, A-Index={sw['A_index']:.1f}, Bz={sw['Bz_nT']:+.1f} nT\n"
-        f"    Gerçek Alıcı TCXO Kayması: +{ft8_res['frame_data']['tcxo_true_hz']:.3f} Hz  -->  "
-        f"Kestirilen Ortak-Mod Kayması: +{ft8_res['tcxo_est_hz']:.3f} Hz"
+        f"\n[2] 14.074 MHz (20m F2 LAYER) FT8 DEMODULATION & COMMON-MODE TCXO CALIBRATION:\n"
+        f"    Space Weather: SFI={sw['SFI']:.1f}, Kp={sw['Kp']:.1f}, A-Index={sw['A_index']:.1f}, Bz={sw['Bz_nT']:+.1f} nT\n"
+        f"    True Receiver TCXO Offset: +{ft8_res['frame_data']['tcxo_true_hz']:.3f} Hz  -->  "
+        f"Estimated Common-Mode Offset: +{ft8_res['tcxo_est_hz']:.3f} Hz"
     )
     print(
-        f"{'Çağrı İş.':<10} | {'Menzil':<9} | {'SNR':<8} | {'Kalibre fd':<12} | "
-        f"{'Doppler Yay.':<13} | {'Katman Hızı vz':<15} | {'Pre-FEC BER'}"
+        f"{'Callsign':<10} | {'Distance':<9} | {'SNR':<8} | {'Calib fd':<12} | "
+        f"{'Doppler Sprd':<13} | {'Layer Vel vz':<15} | {'Pre-FEC BER'}"
     )
     print("-" * 96)
     for st_m in ft8_res["calibrated_stations"]:
@@ -100,13 +98,13 @@ def main() -> None:
 
     wspr_res = pipeline.run_wspr_drift_analysis(freq_mhz=14.0956)
     print(
-        f"\n[3] 14.0956 MHz WSPR (4-FSK) ÇÖZÜMLEME VE İYONOSFERİK SÜRÜKLENME (DRIFT) ANALİZİ:\n"
-        f"    Gerçek TCXO Sürüklenme Eğimi: +{wspr_res['wspr_slot']['tcxo_drift_slope_hz_min']:.3f} Hz/dk  -->  "
-        f"Kestirilen TCXO Eğimi: +{wspr_res['est_drift_slope']:.3f} Hz/dk"
+        f"\n[3] 14.0956 MHz WSPR (4-FSK) DEMODULATION & IONOSPHERIC DRIFT ANALYSIS:\n"
+        f"    True TCXO Drift Slope: +{wspr_res['wspr_slot']['tcxo_drift_slope_hz_min']:.3f} Hz/dk  -->  "
+        f"Estimated TCXO Slope: +{wspr_res['est_drift_slope']:.3f} Hz/dk"
     )
     print(
-        f"{'Çağrı İş.':<10} | {'Menzil':<9} | {'SNR':<8} | {'Ölçülen Drift':<15} | "
-        f"{'Net İono Drift':<16} | {'Katman İvmesi az'}"
+        f"{'Callsign':<10} | {'Distance':<9} | {'SNR':<8} | {'Meas Drift':<15} | "
+        f"{'Net Iono Drift':<16} | {'Layer Accel az'}"
     )
     print("-" * 96)
     for wm in wspr_res["wspr_results"]:
@@ -119,8 +117,8 @@ def main() -> None:
     fmcw_res = pipeline.run_fmcw_ionosonde_sweep()
     crit = fmcw_res["critical_frequencies"]
     print(
-        f"\n[4] DİKEY FMCW İYONOSOND FİZİKSEL İYONOGRAM TARAMASI (1 - 15 MHz):\n"
-        f"    Analitik Kritik Frekanslar: foE = {crit['foE_mhz']:.1f} MHz | foF1 = {crit['foF1_mhz']:.1f} MHz | "
+        f"\n[4] VERTICAL FMCW IONOSONDE PHYSICAL IONOGRAM SWEEP (1 - 15 MHz):\n"
+        f"    Analytical Critical Frequencies: foE = {crit['foE_mhz']:.1f} MHz | foF1 = {crit['foF1_mhz']:.1f} MHz | "
         f"foF2 = {crit['foF2_mhz']:.1f} MHz | fxF2 = {crit['fxF2_mhz']:.1f} MHz"
     )
 
@@ -133,22 +131,22 @@ def main() -> None:
         )
         inversion_res = inversion_dict["inversion_result"]
         print(
-            f"\n[4.1] DİKEY İYONOGRAM GERÇEK İRTİFA TERSİNİMİ ({args.inversion_method.upper()} METODU):\n"
+            f"\n[4.1] VERTICAL IONOGRAM TRUE-HEIGHT INVERSION ({args.inversion_method.upper()} METHOD):\n"
             f"    • Kritik Frekans (foF2)       : {inversion_res.foF2_mhz:.3f} MHz\n"
-            f"    • Tepe İrtifası (hmF2)        : {inversion_res.hmF2_km:.1f} km\n"
-            f"    • Tepe Plazma Yoğunluğu (NmF2): {inversion_res.NmF2_m3:.3e} el/m³\n"
-            f"    • Alt-Tepe TEC (hmF2'ye kadar): {inversion_res.subpeak_tec_tecu:.2f} TECU\n"
-            f"    • Rekonstrüksiyon RMS Hatası  : {inversion_res.residual_rms_km:.4f} km"
+            f"    • Peak Height (hmF2)        : {inversion_res.hmF2_km:.1f} km\n"
+            f"    • Peak Plasma Density (NmF2): {inversion_res.NmF2_m3:.3e} el/m³\n"
+            f"    • Sub-Peak TEC (up to hmF2): {inversion_res.subpeak_tec_tecu:.2f} TECU\n"
+            f"    • Reconstruction RMS Error  : {inversion_res.residual_rms_km:.4f} km"
         )
 
     ray_fan = pipeline.run_ray_tracing_fan(freq_mhz=14.074)
     print(
-        f"\n[5] 2B HASELGROVE IŞIN İZLEME (RAY-TRACING) HESABI (14.074 MHz):\n"
-        f"{'Kalkış Açısı Δ':<16} | {'Durum':<10} | {'Apex İrtifa':<13} | {'Yer Menzili'}"
+        f"\n[5] 2D HASELGROVE RAY-TRACING CALCULATION (14.074 MHz):\n"
+        f"{'Elevation Δ':<16} | {'Status':<10} | {'Apex Height':<13} | {'Ground Range'}"
     )
     print("-" * 96)
     for ray in ray_fan:
-        status_str = "YANSIDI" if ray.reflected else "UZAYA KAÇTI"
+        status_str = "REFLECTED" if ray.reflected else "UZAYA KACTI"
         dist_str = f"{ray.ground_hit_km:>6.1f} km" if ray.reflected else "  ---   "
         print(f"Δ = {ray.elevation_deg:>4.1f}°        | {status_str:<10} | {ray.apex_height_km:>7.1f} km   | {dist_str}")
 
@@ -162,11 +160,11 @@ def main() -> None:
     )
 
     print("\n" + "=" * 96)
-    print(" [OK] ÇIKTILAR BAŞARIYLA ÜRETİLDİ:")
-    print("  -> Grafik Paneli (PNG/PDF) : iono_sense_dashboard.png & iono_sense_dashboard.pdf")
-    print("  -> SQLite Telemetri DB     : iono_telemetry_ta7cae.db")
-    print("  -> Typst Tez Raporu        : tez_bulgulari.typ")
-    print("  -> LaTeX IEEE SİU Tablosu  : tez_bulgulari.tex")
+    print(" [OK] OUTPUTS SUCCESSFULLY GENERATED:")
+    print("  -> Dashboard Plot (PNG/PDF) : iono_sense_dashboard.png & iono_sense_dashboard.pdf")
+    print("  -> SQLite Telemetry DB      : iono_telemetry_ta7cae.db")
+    print("  -> Typst Thesis Report      : thesis_findings.typ")
+    print("  -> LaTeX IEEE SIU Table     : thesis_findings.tex")
     print("=" * 96)
 
 

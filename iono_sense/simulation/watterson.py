@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ITU-R F.1487 Watterson Çok-Yollu Sönümleme Kanalı ve Sentetik FT8/WSPR Üreticisi."""
+"""ITU-R F.1487 Watterson Multipath Fading Channel and Synthetic FT8/WSPR Generator."""
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
@@ -38,7 +38,7 @@ class VirtualStation:
 
 
 class WattersonChannelSimulator:
-    """Rastgele sentetik FT8 ve WSPR istasyonları, Rayleigh sönümleme ve Middleton gürültüsü üretir."""
+    """Generates synthetic FT8 and WSPR stations, Rayleigh fading, and Middleton noise."""
 
     def __init__(self, fs: float = 12000.0, rng_seed: Optional[int] = None):
         self.fs = fs

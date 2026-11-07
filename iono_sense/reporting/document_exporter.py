@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Akademik Rapor Dışa Aktarıcı (Typst .typ ve IEEE SİU LaTeX .tex)."""
+"""Akademik Rapor Disa Aktarici (Typst .typ ve IEEE SIU LaTeX .tex)."""
 
 from typing import Any, Dict, List, Optional
 
@@ -11,12 +11,12 @@ def _get_inv_val(inv: Any, key: str, default: Any = 0.0) -> Any:
 
 
 class AcademicReportExporter:
-    """Typst ve LaTeX formatında akademik raporlar ve tablolar üretir."""
+    """Typst ve LaTeX formatinda akademik raporlar ve tablolar uretir."""
 
     def __init__(
         self,
         operator_callsign: str = "TA7CAE",
-        operator_name: str = "Ahmet Eren Çokcoşkun",
+        operator_name: str = "Ahmet Eren Cokcoskun",
         qth_name: str = "Kayseri / Talas",
         grid: str = "KM78",
         coordinates_str: str = "38.72°N, 35.48°E",
@@ -45,31 +45,31 @@ class AcademicReportExporter:
         )
 
         content = (
-            "// Otomatik Üretilen Akademik Bulgular Raporu (Typst)\n"
-            f"// Yazar: {self.name} ({self.callsign}) - Nuh Naci Yazgan Üniversitesi EEE\n\n"
+            "// Otomatik Uretilen Akademik Bulgular Raporu (Typst)\n"
+            f"// Yazar: {self.name} ({self.callsign}) - Nuh Naci Yazgan Universitesi EEE\n\n"
             '#set page(paper: "a4", margin: 2cm)\n'
             '#set text(font: "New Computer Modern", size: 10.5pt, lang: "tr")\n\n'
-            "= Çok-Bantlı Fırsatçı İyonosferik Algılama ve Mikro-Doppler Kestirim Bulguları\n"
-            f"*Operatör:* {self.name} (`{self.callsign}`) | *Konum:* {self.qth} (`{self.grid}`, ${self.coords}$)\n\n"
-            "== 1. Appleton-Hartree ve Sapmasız Yaklaşım Zayıflama ($alpha$) Hata Bütçesi\n"
-            'Kayseri jeomanyetik alanı ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) altında elde edilen iki yönlü sönümleme karşılaştırması:\n\n'
+            "= Cok-Bantli Firsatci Iyonosferik Algilama ve Mikro-Doppler Kestirim Bulgulari\n"
+            f"*Operator:* {self.name} (`{self.callsign}`) | *Konum:* {self.qth} (`{self.grid}`, ${self.coords}$)\n\n"
+            "== 1. Appleton-Hartree ve Sapmasiz Yaklasim Zayiflama ($alpha$) Hata Butcesi\n"
+            'Kayseri jeomanyetik alani ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) altinda elde edilen iki yonlu sonumleme karsilastirmasi:\n\n'
             "#table(\n"
             "  columns: (auto, auto, auto, auto, auto, auto, auto),\n"
             "  align: center,\n"
-            "  [*Frekans*], [*Katman*], [*İrtifa*], [*Basit $1/f^2$*], [*Tam O-Modu*], [*Tam X-Modu*], [*X-Modu Farkı*],\n"
+            "  [*Frekans*], [*Katman*], [*Irtifa*], [*Basit $1/f^2$*], [*Tam O-Modu*], [*Tam X-Modu*], [*X-Modu Farki*],\n"
             f"{typst_rows}\n"
             ")\n\n"
             "== 2. Ortak-Mod TCXO Kalibrasyonu ve Alt-Paketsel Mikro-Doppler\n"
-            f"- *Kestirilen RSPdx TCXO Ortak-Mod Kayması:* `{tcxo_est:+.3f} Hz` (Gerçek: `+1.350 Hz`)\n"
+            f"- *Kestirilen RSPdx TCXO Ortak-Mod Kaymasi:* `{tcxo_est:+.3f} Hz` (Gercek: `+1.350 Hz`)\n"
         )
 
         if wspr_metrics:
             content += (
-                "\n== 3. WSPR (4-FSK) İyonosferik Frekans Sürüklenmesi (Drift Rate) ve Katman İvmesi\n"
+                "\n== 3. WSPR (4-FSK) Iyonosferik Frekans Suruklenmesi (Drift Rate) ve Katman Ivmesi\n"
                 "#table(\n"
                 "  columns: (auto, auto, auto, auto, auto, auto),\n"
                 "  align: center,\n"
-                "  [*Çağrı İşareti*], [*Grid*], [*Menzil*], [*SNR*], [*İyonosferik Sürüklenme*], [*Katman İvmesi $a_z$*],\n"
+                "  [*Cagri Isareti*], [*Grid*], [*Menzil*], [*SNR*], [*Iyonosferik Suruklenme*], [*Katman Ivmesi $a_z$*],\n"
             )
             for wm in wspr_metrics:
                 content += (
@@ -89,16 +89,16 @@ class AcademicReportExporter:
             ne = _get_inv_val(inversion_result, "electron_density_m3", None)
 
             content += (
-                "\n== 4. Breit-Tuve Sanal İrtifadan Gerçek İrtifa Tersinimi (True-Height Inversion)\n"
-                "FMCW dikey iyonosond sanal irtifa verileri $h'(f)$, Breit-Tuve integral denklemine dayanmaktadır:\n"
+                "\n== 4. Breit-Tuve Sanal Irtifadan Gercek Irtifa Tersinimi (True-Height Inversion)\n"
+                "FMCW dikey iyonosond sanal irtifa verileri $h'(f)$, Breit-Tuve integral denklemine dayanmaktadir:\n"
                 "$ h'(f) = h_0 + integral_0^{h_r(f)} mu'(f, f_p(h)) dif h $\n\n"
-                "Bu Abel-tipi integral denklemi, Jackson (1969) parçalı doğrusal laminasyon matris çekirdeği "
-                "$M_(i k)$ ve Tikhonov 2. derece ayrık eğrilik regülarizasyon operatörü ($L$) kullanılarak tersinmiştir. "
-                "Elde edilen tepe parametreleri ve alt-iyonosferik toplam elektron içeriği aşağıda özetlenmiştir:\n\n"
+                "Bu Abel-tipi integral denklemi, Jackson (1969) parcali dogrusal laminasyon matris cekirdegi "
+                "$M_(i k)$ ve Tikhonov 2. derece ayrik egrilik regularizasyon operatoru ($L$) kullanilarak tersinmistir. "
+                "Elde edilen tepe parametreleri ve alt-iyonosferik toplam elektron icerigi asagida ozetlenmistir:\n\n"
                 "#table(\n"
                 "  columns: (auto, auto, auto, auto, auto),\n"
                 "  align: center,\n"
-                "  [*foF2 (Kritik Frekans)*], [*hmF2 (Tepe İrtifası)*], [*NmF2 (Elektron Yoğunluğu)*], [*Alt-Tepe TEC*], [*Kalıntı RMS*],\n"
+                "  [*foF2 (Kritik Frekans)*], [*hmF2 (Tepe Irtifasi)*], [*NmF2 (Elektron Yogunlugu)*], [*Alt-Tepe TEC*], [*Kalinti RMS*],\n"
                 f"  [{foF2:.3f} MHz], [{hmF2:.1f} km], [{NmF2:.3e} el/m³], [{tec:.2f} TECU], [{rms:.4f} km],\n"
                 ")\n"
             )
@@ -115,11 +115,11 @@ class AcademicReportExporter:
                     for idx in sampled_indices
                 )
                 content += (
-                    "\n*Tersinim ile Kestirilen Katman Profili Örneklemleri:*\n"
+                    "\n*Tersinim ile Kestirilen Katman Profili Orneklemleri:*\n"
                     "#table(\n"
                     "  columns: (auto, auto, auto),\n"
                     "  align: center,\n"
-                    "  [*Plazma Frekansı $f_p$*], [*Gerçek İrtifa $h$*], [*Elektron Yoğunluğu $N_e$*],\n"
+                    "  [*Plazma Frekansi $f_p$*], [*Gercek Irtifa $h$*], [*Elektron Yogunlugu $N_e$*],\n"
                     f"{layer_rows}\n"
                     ")\n"
                 )
@@ -142,14 +142,14 @@ class AcademicReportExporter:
         )
 
         lines = [
-            "% Otomatik Üretilen IEEE SİU / Bitirme Tezi Tablosu (LaTeX)",
+            "% Otomatik Uretilen IEEE SIU / Bitirme Tezi Tablosu (LaTeX)",
             f"% Yazar: {self.name} ({self.callsign})",
             r"\begin{table}[htbp]",
             r"\centering",
-            r"\caption{Kayseri Orta Enlem İyonosferinde Yaklaşım vs. Tam Magneto-İyonik Zayıflama Analizi}",
+            r"\caption{Kayseri Orta Enlem Iyonosferinde Yaklasim vs. Tam Magneto-Iyonik Zayiflama Analizi}",
             r"\begin{tabular}{ccccccc}",
             r"\hline",
-            r"\textbf{Frekans (MHz)} & \textbf{Katman} & \textbf{$h_{\mathrm{refl}}$ (km)} & \textbf{Basit $1/f^2$ (dB)} & \textbf{O-Modu (dB)} & \textbf{X-Modu (dB)} & \textbf{Hata Payı (dB)} \\",
+            r"\textbf{Frekans (MHz)} & \textbf{Katman} & \textbf{$h_{\mathrm{refl}}$ (km)} & \textbf{Basit $1/f^2$ (dB)} & \textbf{O-Modu (dB)} & \textbf{X-Modu (dB)} & \textbf{Hata Payi (dB)} \\",
             r"\hline",
             latex_rows,
             r"\hline",
@@ -166,13 +166,13 @@ class AcademicReportExporter:
 
             lines.extend([
                 "",
-                "% Gerçek İrtifa İyonogram Tersinimi (True-Height Inversion foF2, hmF2) Bulguları",
+                "% Gercek Irtifa Iyonogram Tersinimi (True-Height Inversion foF2, hmF2) Bulgulari",
                 r"\begin{table}[htbp]",
                 r"\centering",
-                r"\caption{Dikey FMCW İyonosond İyonogramından Sayısal Tersinim ile Kestirilen İyonosferik Tepe Parametreleri}",
+                r"\caption{Dikey FMCW Iyonosond Iyonogramindan Sayisal Tersinim ile Kestirilen Iyonosferik Tepe Parametreleri}",
                 r"\begin{tabular}{ccccc}",
                 r"\hline",
-                r"\textbf{$f_oF2$ (MHz)} & \textbf{$h_mF2$ (km)} & \textbf{$N_mF2$ ($\mathrm{m}^{-3}$)} & \textbf{$\mathrm{TEC}_{\mathrm{bottom}}$ (TECU)} & \textbf{Kalıntı RMS (km)} \\",
+                r"\textbf{$f_oF2$ (MHz)} & \textbf{$h_mF2$ (km)} & \textbf{$N_mF2$ ($\mathrm{m}^{-3}$)} & \textbf{$\mathrm{TEC}_{\mathrm{bottom}}$ (TECU)} & \textbf{Kalinti RMS (km)} \\",
                 r"\hline",
                 f"{foF2:.3f} & {hmF2:.1f} & {NmF2:.3e} & {tec:.2f} & {rms:.4f} \\\\",
                 r"\hline",
