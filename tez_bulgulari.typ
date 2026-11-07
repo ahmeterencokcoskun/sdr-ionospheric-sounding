@@ -23,15 +23,43 @@ Kayseri jeomanyetik alanı ($B_0 = 48.2 space mu"T"$, $f_H approx 1.35 "MHz"$) a
 )
 
 == 2. Ortak-Mod TCXO Kalibrasyonu ve Alt-Paketsel Mikro-Doppler
-- *Kestirilen RSPdx TCXO Ortak-Mod Kayması:* `+1.393 Hz` (Gerçek: `+1.350 Hz`)
+- *Kestirilen RSPdx TCXO Ortak-Mod Kayması:* `+0.467 Hz` (Gerçek: `+1.350 Hz`)
 
 == 3. WSPR (4-FSK) İyonosferik Frekans Sürüklenmesi (Drift Rate) ve Katman İvmesi
 #table(
   columns: (auto, auto, auto, auto, auto, auto),
   align: center,
   [*Çağrı İşareti*], [*Grid*], [*Menzil*], [*SNR*], [*İyonosferik Sürüklenme*], [*Katman İvmesi $a_z$*],
-  [G5FFR], [AA53], [3076 km], [-0.5 dB], [-0.55 Hz/dk], [+0.315 m/s²],
-  [DL5WML], [FM94], [1141 km], [-2.8 dB], [+0.30 Hz/dk], [-0.172 m/s²],
-  [DL1VHG], [DN40], [2145 km], [-3.8 dB], [+0.20 Hz/dk], [-0.115 m/s²],
-  [JA9HIM], [DL21], [4482 km], [+7.6 dB], [-0.20 Hz/dk], [+0.115 m/s²],
+  [TA6XVM], [AG90], [2146 km], [+4.1 dB], [+0.68 Hz/dk], [-0.387 m/s²],
+  [F7ZZS], [MQ66], [2452 km], [-3.1 dB], [-0.18 Hz/dk], [+0.100 m/s²],
+  [JA5CYE], [AG00], [2942 km], [+6.1 dB], [-0.23 Hz/dk], [+0.129 m/s²],
+  [EA6WSF], [HR87], [2383 km], [+6.8 dB], [+0.18 Hz/dk], [-0.100 m/s²],
+)
+
+== 4. Breit-Tuve Sanal İrtifadan Gerçek İrtifa Tersinimi (True-Height Inversion)
+FMCW dikey iyonosond sanal irtifa verileri $h'(f)$, Breit-Tuve integral denklemine dayanmaktadır:
+$ h'(f) = h_0 + integral_0^{h_r(f)} mu'(f, f_p(h)) dif h $
+
+Bu Abel-tipi integral denklemi, Jackson (1969) parçalı doğrusal laminasyon matris çekirdeği $M_(i k)$ ve Tikhonov 2. derece ayrık eğrilik regülarizasyon operatörü ($L$) kullanılarak tersinmiştir. Elde edilen tepe parametreleri ve alt-iyonosferik toplam elektron içeriği aşağıda özetlenmiştir:
+
+#table(
+  columns: (auto, auto, auto, auto, auto),
+  align: center,
+  [*foF2 (Kritik Frekans)*], [*hmF2 (Tepe İrtifası)*], [*NmF2 (Elektron Yoğunluğu)*], [*Alt-Tepe TEC*], [*Kalıntı RMS*],
+  [10.871 MHz], [262.4 km], [1.466e+12 el/m³], [10.42 TECU], [0.0000 km],
+)
+
+*Tersinim ile Kestirilen Katman Profili Örneklemleri:*
+#table(
+  columns: (auto, auto, auto),
+  align: center,
+  [*Plazma Frekansı $f_p$*], [*Gerçek İrtifa $h$*], [*Elektron Yoğunluğu $N_e$*],
+  [1.00 MHz], [79.0 km], [1.240e+10 el/m³],
+  [2.41 MHz], [93.2 km], [7.205e+10 el/m³],
+  [3.82 MHz], [98.8 km], [1.810e+11 el/m³],
+  [5.23 MHz], [143.7 km], [3.393e+11 el/m³],
+  [6.64 MHz], [195.2 km], [5.470e+11 el/m³],
+  [8.05 MHz], [212.6 km], [8.039e+11 el/m³],
+  [9.46 MHz], [230.4 km], [1.110e+12 el/m³],
+  [10.87 MHz], [262.4 km], [1.466e+12 el/m³],
 )

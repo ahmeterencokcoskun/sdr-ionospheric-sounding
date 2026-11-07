@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
-"""
-Akademik Gösterge Paneli Çizicisi (Genişletilmiş 6 Panelli Vektörel Dashboard).
-Panel 3 içine dikey FMCW İyonogram ($h'-f$) renk haritasını ve Haselgrove Işın İzleme fanını entegre eder.
-"""
+"""6 Panelli Akademik Araştırma Gösterge Paneli Çizicisi."""
 
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
 
-class AcademicDashboardPlotter:
-    """Akademik Araştırma Dashboard Çizicisi."""
+def _extract_inv_attr(inv: Any, key: str, default: Any = 0.0) -> Any:
+    if isinstance(inv, dict):
+        return inv.get(key, default)
+    return getattr(inv, key, default)
 
-    def __init__(
-        self,
-        figsize: tuple = (18, 11.5),
-        dpi: int = 160,
-        dark_mode: bool = True,
-    ):
+
+class AcademicDashboardPlotter:
+    """6 panelli vektörel analiz gösterge paneli üreticisi."""
+
+    def __init__(self, figsize: tuple = (18, 11.5), dpi: int = 160, dark_mode: bool = True):
         self.figsize = figsize
         self.dpi = dpi
         self.dark_mode = dark_mode
@@ -31,72 +30,34 @@ class AcademicDashboardPlotter:
         inversion_result: Optional[Any] = None,
         fig=None,
     ) -> None:
-        """
-        Dikey FMCW İyonogramını ($h'-f$) ve varsa gerçek irtifa tersinim eğrisini ($h-f$) çizer.
-        """
         freqs = ionogram_data["freqs_mhz"]
         heights = ionogram_data["heights_km"]
-        iono_db = ionogram_data["ionogram_db"]
-
-        # 1. 2B Sanal İrtifa Güç Spektrumu Renk Haritası
-        im = ax.pcolormesh(freqs, heights, iono_db, shading="auto", cmap="inferno", zorder=1)
+        im = ax.pcolormesh(freqs, heights, ionogram_data["ionogram_db"], shading="auto", cmap="inferno", zorder=1)
         if fig is not None:
             fig.colorbar(im, ax=ax, label="Yankı Gücü (dB)")
 
-        # 2. Analitik Kritik Frekans Düşey Çizgileri
         crit = ionogram_data.get("critical_frequencies", {})
         foE = crit.get("foE_mhz", 3.4)
         foF2 = crit.get("foF2_mhz", 10.8)
         ax.axvline(foE, color="#00e5ff", ls=":", lw=1.2, label=f"foE: {foE:.1f} MHz", zorder=2)
         ax.axvline(foF2, color="#ff1744", ls="--", lw=1.2, label=f"foF2: {foF2:.1f} MHz", zorder=2)
 
-        # 3. Gerçek İrtifa Tersinim Eğrisi Örtüşmesi (True-Height Inversion Overlay)
         inv = inversion_result if inversion_result is not None else ionogram_data.get("inversion_result")
         if inv is not None:
-            if hasattr(inv, "plasma_freqs_mhz"):
-                inv_f = np.asarray(inv.plasma_freqs_mhz)
-                inv_h = np.asarray(inv.true_heights_km)
-                inv_foF2 = float(inv.foF2_mhz)
-                inv_hmF2 = float(inv.hmF2_km)
-                inv_NmF2 = float(inv.NmF2_m3)
-                inv_tec = float(inv.subpeak_tec_tecu)
-                inv_rms = float(inv.residual_rms_km)
-            elif isinstance(inv, dict):
-                inv_f = np.asarray(inv.get("plasma_freqs_mhz", []))
-                inv_h = np.asarray(inv.get("true_heights_km", []))
-                inv_foF2 = float(inv.get("foF2_mhz", 0.0))
-                inv_hmF2 = float(inv.get("hmF2_km", 0.0))
-                inv_NmF2 = float(inv.get("NmF2_m3", 0.0))
-                inv_tec = float(inv.get("subpeak_tec_tecu", 0.0))
-                inv_rms = float(inv.get("residual_rms_km", 0.0))
-            else:
-                inv_f = np.array([])
-                inv_h = np.array([])
-
+            inv_f = np.asarray(_extract_inv_attr(inv, "plasma_freqs_mhz", []))
+            inv_h = np.asarray(_extract_inv_attr(inv, "true_heights_km", []))
             if len(inv_f) > 0 and len(inv_h) > 0 and np.all(np.isfinite(inv_f)) and np.all(np.isfinite(inv_h)):
-                # Gerçek İrtifa Eğrisi (Mint Yeşili)
-                ax.plot(
-                    inv_f,
-                    inv_h,
-                    color="#00ff9d",
-                    lw=2.2,
-                    ls="-",
-                    label="Gerçek İrtifa h(f)",
-                    zorder=5,
-                )
-                # F2 Katman Zirve Noktası (hmF2, foF2)
-                ax.plot(
-                    inv_foF2,
-                    inv_hmF2,
-                    marker="*",
-                    markersize=9,
-                    color="#ffff00",
-                    ls="",
-                    label=f"hmF2: {inv_hmF2:.1f} km",
-                    zorder=6,
-                )
+                inv_foF2 = float(_extract_inv_attr(inv, "foF2_mhz"))
+                inv_hmF2 = float(_extract_inv_attr(inv, "hmF2_km"))
+                inv_NmF2 = float(_extract_inv_attr(inv, "NmF2_m3"))
+                inv_tec = float(_extract_inv_attr(inv, "subpeak_tec_tecu"))
+                inv_rms = float(_extract_inv_attr(inv, "residual_rms_km"))
 
-                # Bilgi ve Parametre Kutusu (Sağ Alt Köşe)
+                ax.plot(inv_f, inv_h, color="#00ff9d", lw=2.2, ls="-", label="Gerçek İrtifa h(f)", zorder=5)
+                ax.plot(
+                    inv_foF2, inv_hmF2, marker="*", markersize=9, color="#ffff00",
+                    ls="", label=f"hmF2: {inv_hmF2:.1f} km", zorder=6,
+                )
                 anno_text = (
                     f"foF2 = {inv_foF2:.2f} MHz\n"
                     f"hmF2 = {inv_hmF2:.1f} km\n"
@@ -105,23 +66,9 @@ class AcademicDashboardPlotter:
                     f"RMS  = {inv_rms:.2f} km"
                 )
                 ax.text(
-                    0.96,
-                    0.05,
-                    anno_text,
-                    transform=ax.transAxes,
-                    fontsize=7.5,
-                    fontfamily="monospace",
-                    verticalalignment="bottom",
-                    horizontalalignment="right",
-                    bbox=dict(
-                        boxstyle="round,pad=0.4",
-                        facecolor="#101426",
-                        edgecolor="#00e5ff",
-                        alpha=0.88,
-                        lw=1.0,
-                    ),
-                    color="#ffffff",
-                    zorder=7,
+                    0.96, 0.05, anno_text, transform=ax.transAxes, fontsize=7.5, fontfamily="monospace",
+                    va="bottom", ha="right", color="#ffffff", zorder=7,
+                    bbox=dict(boxstyle="round,pad=0.4", facecolor="#101426", edgecolor="#00e5ff", alpha=0.88, lw=1.0),
                 )
 
         title_str = (
@@ -151,21 +98,19 @@ class AcademicDashboardPlotter:
         save_pdf: str = "iono_sense_dashboard.pdf",
         inversion_result: Optional[Any] = None,
     ) -> None:
-        """Dashboard figürünü oluşturur ve PNG/PDF olarak kaydeder."""
         if self.dark_mode:
             plt.style.use("dark_background")
 
         fig, axes = plt.subplots(2, 3, figsize=self.figsize, dpi=self.dpi)
         fig.suptitle(
             "IONO-SENSE TA7CAE: Çok-Bantlı Fırsatçı İyonosferik Sondaj ve Plazma Analiz Paneli\n"
-            f"QTH: Kayseri / Talas (38.6875°N, 35.5555°E - KM78sq) | SFI: {sw_data['SFI']:.0f} | Kp: {sw_data['Kp']:.0f} | "
-            f"IMF Bz: {sw_data['Bz_nT']:+.1f} nT",
+            f"QTH: Kayseri / Talas (38.6875°N, 35.5555°E - KM78sq) | SFI: {sw_data['SFI']:.0f} | "
+            f"Kp: {sw_data['Kp']:.0f} | IMF Bz: {sw_data['Bz_nT']:+.1f} nT",
             fontsize=13,
             fontweight="bold",
             color="#00e5ff",
         )
 
-        # Panel 1: Plazma Frekansı Profili fp(h)
         ax1 = axes[0, 0]
         ax1.plot(plasma_day.fp_hz / 1e6, plasma_day.h_km, color="#00ff9d", lw=2.2, label="Gündüz (D, E, F1, F2)")
         ax1.plot(plasma_night.fp_hz / 1e6, plasma_night.h_km, color="#ff9100", lw=2.0, ls="--", label="Gece (Birleşik F)")
@@ -175,17 +120,15 @@ class AcademicDashboardPlotter:
         ax1.grid(True, alpha=0.25)
         ax1.legend(loc="lower right", fontsize=8.5)
 
-        # Panel 2: Zayıflama (Alpha) Model Karşılaştırması
         ax2 = axes[0, 1]
         valid_r = [r for r in plasma_results if not r.get("penetrates", False)]
-        f_labels = [f"{r['freq_mhz']:.1f}" for r in valid_r]
         x_pos = np.arange(len(valid_r))
         w = 0.25
         ax2.bar(x_pos - w, [r["loss_approx_db"] for r in valid_r], width=w, color="#2979ff", label="Basit 1/f²")
         ax2.bar(x_pos, [r["loss_sen_wyller_db"] for r in valid_r], width=w, color="#00e676", label="Tam O-Modu (Sen-Wyller)")
         ax2.bar(x_pos + w, [r["loss_X_db"] for r in valid_r], width=w, color="#ff1744", label="Tam X-Modu")
         ax2.set_xticks(x_pos)
-        ax2.set_xticklabels(f_labels)
+        ax2.set_xticklabels([f"{r['freq_mhz']:.1f}" for r in valid_r])
         ax2.set_yscale("log")
         ax2.set_title("2. Magneto-İyonik Zayıflama Hata Bütçesi (dB)", fontsize=10.5, color="#e0e0e0")
         ax2.set_xlabel("Taşıyıcı Frekans (MHz)")
@@ -193,34 +136,25 @@ class AcademicDashboardPlotter:
         ax2.grid(True, alpha=0.25, which="both")
         ax2.legend(fontsize=8)
 
-        # Panel 3: Fiziksel FMCW İyonogramı (h' - f)
         ax3 = axes[0, 2]
         if ionogram_data is not None:
-            self.plot_sounding_ionogram(
-                ax=ax3,
-                ionogram_data=ionogram_data,
-                inversion_result=inversion_result,
-                fig=fig,
-            )
+            self.plot_sounding_ionogram(ax=ax3, ionogram_data=ionogram_data, inversion_result=inversion_result, fig=fig)
         else:
-            Sxx, f_spec, t_spec = matplotlib.mlab.specgram(
-                frame_20m["iq_buffer"], NFFT=2048, Fs=12000.0, noverlap=1536
-            )
+            Sxx, f_spec, t_spec = matplotlib.mlab.specgram(frame_20m["iq_buffer"], NFFT=2048, Fs=12000.0, noverlap=1536)
             mask_f = (f_spec >= 400.0) & (f_spec <= 2700.0)
-            im3 = ax3.pcolormesh(f_spec[mask_f], t_spec, 10.0 * np.log10(np.abs(Sxx[mask_f, :]).T + 1e-12), shading="auto", cmap="inferno")
+            ax3.pcolormesh(
+                f_spec[mask_f], t_spec, 10.0 * np.log10(np.abs(Sxx[mask_f, :]).T + 1e-12), shading="auto", cmap="inferno"
+            )
             ax3.set_title("3. 14.074 MHz FT8 Taban Bant Spektrogramı", fontsize=10.5, color="#e0e0e0")
             ax3.set_xlabel("Frekans (Hz)")
             ax3.set_ylabel("Zaman (s)")
 
-        # Panel 4: Mikro-Doppler İzleyici
         ax4 = axes[1, 0]
         if calibrated_stations:
-            target_st = calibrated_stations[0]
-            t_sub = target_st["t_sig"][8000:-8000] if len(target_st["t_sig"]) > 16000 else target_st["t_sig"]
-            inst_doppler_sub = target_st["inst_doppler_true"][8000:-8000] if len(target_st["inst_doppler_true"]) > 16000 else target_st["inst_doppler_true"]
-            fd_est_sub = target_st["fd_est"][8000:-8000] if len(target_st["fd_est"]) > 16000 else target_st["fd_est"]
-            ax4.plot(t_sub, inst_doppler_sub, color="#ffffff", lw=2.0, ls="--", label="Gerçek TID Doppler")
-            ax4.plot(t_sub, fd_est_sub, color="#00e5ff", lw=1.8, label=f"Kestirilen [{target_st['callsign']}]")
+            st = calibrated_stations[0]
+            sl = slice(8000, -8000) if len(st["t_sig"]) > 16000 else slice(None)
+            ax4.plot(st["t_sig"][sl], st["inst_doppler_true"][sl], color="#ffffff", lw=2.0, ls="--", label="Gerçek TID Doppler")
+            ax4.plot(st["t_sig"][sl], st["fd_est"][sl], color="#00e5ff", lw=1.8, label=f"Kestirilen [{st['callsign']}]")
             ax4.legend(fontsize=8.5)
         else:
             ax4.text(0.5, 0.5, "İstasyon Verisi Yok", transform=ax4.transAxes, ha="center", va="center", color="#888888")
@@ -229,11 +163,13 @@ class AcademicDashboardPlotter:
         ax4.set_ylabel("Doppler Kayması (Hz)")
         ax4.grid(True, alpha=0.25)
 
-        # Panel 5: Haselgrove 2B Işın İzleme (Ray-Tracing) Yörüngeleri
         ax5 = axes[1, 1]
         if ray_fan:
             for ray in ray_fan:
-                ax5.plot(ray.ground_dist_km, ray.h_km, lw=1.8, label=f"Δ={ray.elevation_deg:.0f}° ({'Yansıdı' if ray.reflected else 'Kaçtı'})")
+                ax5.plot(
+                    ray.ground_dist_km, ray.h_km, lw=1.8,
+                    label=f"Δ={ray.elevation_deg:.0f}° ({'Yansıdı' if ray.reflected else 'Kaçtı'})",
+                )
             ax5.axhline(110.0, color="#76ff03", ls=":", alpha=0.6, label="E Katmanı")
             ax5.axhline(290.0, color="#ff3d00", ls=":", alpha=0.6, label="F2 Katmanı")
             ax5.set_title("5. 2B Haselgrove Işın İzleme (14 MHz Ray-Fan)", fontsize=10.5, color="#e0e0e0")
@@ -245,21 +181,22 @@ class AcademicDashboardPlotter:
         else:
             z_in = calibrated_stations[0]["z_smooth"] if calibrated_stations else None
             tau_ms, fd_grid, S_db = dsp_core.compute_scattering_function(z_in)
-            im5 = ax5.contourf(tau_ms, fd_grid, S_db, levels=24, cmap="viridis")
+            ax5.contourf(tau_ms, fd_grid, S_db, levels=24, cmap="viridis")
             ax5.set_title("5. Kanal Saçılma Fonksiyonu S(τ, fd)", fontsize=10.5, color="#e0e0e0")
             ax5.set_xlabel("Grup Gecikmesi τ (ms)")
             ax5.set_ylabel("Doppler Frekansı fd (Hz)")
 
-        # Panel 6: BER Başarım Eğrileri
         ax6 = axes[1, 2]
-        ber_data = dsp_core.compute_multimode_ber_curves()
-        ax6.semilogy(ber_data["ebn0_db"], ber_data["ber_wspr"], color="#00e676", lw=2.2, label="WSPR (4-FSK + K=32)")
-        ax6.semilogy(ber_data["ebn0_db"], ber_data["ber_ft8"], color="#00e5ff", lw=2.2, label="FT8 (8-GFSK + LDPC)")
-        ax6.semilogy(ber_data["ebn0_db"], ber_data["ber_stanag"], color="#ffab00", lw=2.0, ls="-.", label="STANAG 4285")
-        ax6.semilogy(ber_data["ebn0_db"], ber_data["ber_psk31"], color="#ff1744", lw=2.0, ls=":", label="PSK31")
-        emp_snrs = [s["snr_db"] + 6.0 for s in calibrated_stations]
-        emp_bers = [max(s["pre_fec_ber"], 1e-4) for s in calibrated_stations]
-        ax6.scatter(emp_snrs, emp_bers, color="#ffffff", edgecolor="#ff1744", s=55, zorder=5, label="Ölçülen Pre-FEC BER")
+        ber = dsp_core.compute_multimode_ber_curves()
+        ax6.semilogy(ber["ebn0_db"], ber["ber_wspr"], color="#00e676", lw=2.2, label="WSPR (4-FSK + K=32)")
+        ax6.semilogy(ber["ebn0_db"], ber["ber_ft8"], color="#00e5ff", lw=2.2, label="FT8 (8-GFSK + LDPC)")
+        ax6.semilogy(ber["ebn0_db"], ber["ber_stanag"], color="#ffab00", lw=2.0, ls="-.", label="STANAG 4285")
+        ax6.semilogy(ber["ebn0_db"], ber["ber_psk31"], color="#ff1744", lw=2.0, ls=":", label="PSK31")
+        ax6.scatter(
+            [s["snr_db"] + 6.0 for s in calibrated_stations],
+            [max(s["pre_fec_ber"], 1e-4) for s in calibrated_stations],
+            color="#ffffff", edgecolor="#ff1744", s=55, zorder=5, label="Ölçülen Pre-FEC BER",
+        )
         ax6.set_title("6. İyonosferik Modların BER Karşılaştırması", fontsize=10.5, color="#e0e0e0")
         ax6.set_xlabel("Eb/N0 (dB)")
         ax6.set_ylabel("Bit Hata Oranı (BER)")

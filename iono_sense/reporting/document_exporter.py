@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""
-Akademik Rapor Dışa Aktarıcı:
-Bulguları Typst (.typ) ve LaTeX (.tex) formatında standart IEEE/SİU formatında üretir.
-"""
+"""Akademik Rapor Dışa Aktarıcı (Typst .typ ve IEEE SİU LaTeX .tex)."""
 
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
+
+
+def _get_inv_val(inv: Any, key: str, default: Any = 0.0) -> Any:
+    if isinstance(inv, dict):
+        return inv.get(key, default)
+    return getattr(inv, key, default)
 
 
 class AcademicReportExporter:
-    """Typst ve LaTeX formatında akademik raporlar ve tablolar üreten sınıf."""
+    """Typst ve LaTeX formatında akademik raporlar ve tablolar üretir."""
 
     def __init__(
         self,
@@ -33,7 +36,6 @@ class AcademicReportExporter:
         filepath: str = "tez_bulgulari.typ",
         inversion_result: Optional[Any] = None,
     ) -> None:
-        """Typst akademik raporunu diske yazar."""
         typst_rows = "\n".join(
             f"  [{r['freq_mhz']:.3f} MHz], [{r['layer']}], "
             f"[{r['refl_height_km']:.1f} km], [{r['loss_approx_db']:.2f} dB], "
@@ -77,14 +79,14 @@ class AcademicReportExporter:
             content += ")\n"
 
         if inversion_result is not None:
-            foF2 = float(getattr(inversion_result, "foF2_mhz", inversion_result.get("foF2_mhz", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            hmF2 = float(getattr(inversion_result, "hmF2_km", inversion_result.get("hmF2_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            NmF2 = float(getattr(inversion_result, "NmF2_m3", inversion_result.get("NmF2_m3", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            tec = float(getattr(inversion_result, "subpeak_tec_tecu", inversion_result.get("subpeak_tec_tecu", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            rms = float(getattr(inversion_result, "residual_rms_km", inversion_result.get("residual_rms_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            true_h = getattr(inversion_result, "true_heights_km", inversion_result.get("true_heights_km", None) if isinstance(inversion_result, dict) else None)
-            pf = getattr(inversion_result, "plasma_freqs_mhz", inversion_result.get("plasma_freqs_mhz", None) if isinstance(inversion_result, dict) else None)
-            ne = getattr(inversion_result, "electron_density_m3", inversion_result.get("electron_density_m3", None) if isinstance(inversion_result, dict) else None)
+            foF2 = float(_get_inv_val(inversion_result, "foF2_mhz"))
+            hmF2 = float(_get_inv_val(inversion_result, "hmF2_km"))
+            NmF2 = float(_get_inv_val(inversion_result, "NmF2_m3"))
+            tec = float(_get_inv_val(inversion_result, "subpeak_tec_tecu"))
+            rms = float(_get_inv_val(inversion_result, "residual_rms_km"))
+            true_h = _get_inv_val(inversion_result, "true_heights_km", None)
+            pf = _get_inv_val(inversion_result, "plasma_freqs_mhz", None)
+            ne = _get_inv_val(inversion_result, "electron_density_m3", None)
 
             content += (
                 "\n== 4. Breit-Tuve Sanal İrtifadan Gerçek İrtifa Tersinimi (True-Height Inversion)\n"
@@ -131,7 +133,6 @@ class AcademicReportExporter:
         filepath: str = "tez_bulgulari.tex",
         inversion_result: Optional[Any] = None,
     ) -> None:
-        """IEEE SİU ve Tez formatında LaTeX tablosunu diske yazar."""
         latex_rows = "\n".join(
             f"{r['freq_mhz']:.3f} & {r['layer']} & {r['refl_height_km']:.1f} & "
             f"{r['loss_approx_db']:.2f} & {r['loss_O_db']:.2f} & {r['loss_X_db']:.2f} & "
@@ -157,19 +158,15 @@ class AcademicReportExporter:
         ]
 
         if inversion_result is not None:
-            foF2 = float(getattr(inversion_result, "foF2_mhz", inversion_result.get("foF2_mhz", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            hmF2 = float(getattr(inversion_result, "hmF2_km", inversion_result.get("hmF2_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            NmF2 = float(getattr(inversion_result, "NmF2_m3", inversion_result.get("NmF2_m3", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            tec = float(getattr(inversion_result, "subpeak_tec_tecu", inversion_result.get("subpeak_tec_tecu", 0.0) if isinstance(inversion_result, dict) else 0.0))
-            rms = float(getattr(inversion_result, "residual_rms_km", inversion_result.get("residual_rms_km", 0.0) if isinstance(inversion_result, dict) else 0.0))
+            foF2 = float(_get_inv_val(inversion_result, "foF2_mhz"))
+            hmF2 = float(_get_inv_val(inversion_result, "hmF2_km"))
+            NmF2 = float(_get_inv_val(inversion_result, "NmF2_m3"))
+            tec = float(_get_inv_val(inversion_result, "subpeak_tec_tecu"))
+            rms = float(_get_inv_val(inversion_result, "residual_rms_km"))
 
-            inv_table_lines = [
+            lines.extend([
                 "",
-                "% ============================================================================",
                 "% Gerçek İrtifa İyonogram Tersinimi (True-Height Inversion foF2, hmF2) Bulguları",
-                r"% Breit-Tuve Grubu Gecikmesi h'(f) = h_0 + \int_0^{h_r} \mu'(f, h) dh",
-                "% Jackson (1969) / Tikhonov Regularization",
-                "% ============================================================================",
                 r"\begin{table}[htbp]",
                 r"\centering",
                 r"\caption{Dikey FMCW İyonosond İyonogramından Sayısal Tersinim ile Kestirilen İyonosferik Tepe Parametreleri}",
@@ -181,8 +178,7 @@ class AcademicReportExporter:
                 r"\hline",
                 r"\end{tabular}",
                 r"\end{table}",
-            ]
-            lines.extend(inv_table_lines)
+            ])
 
         with open(filepath, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")

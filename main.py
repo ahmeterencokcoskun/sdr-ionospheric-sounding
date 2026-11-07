@@ -1,14 +1,7 @@
 #!/usr/bin/env python3
-"""
-IONO-SENSE TA7CAE — Ana Komuta ve Yürütücü Konsolu (CLI Orchestrator).
-Desteklenen Modlar:
-  --mode live      : Canlı NOAA SWPC internet telemetrisi + Dinamik stokastik RF benzetimi
-  --mode sim       : Tam stokastik bağımsız simülasyon modu
-  --mode benchmark : Birim testler ve tekrarlanabilir tez bulguları için deterministik mod
-"""
+"""IONO-SENSE TA7CAE — Ana Komuta ve Yürütücü Konsolu (CLI Orchestrator)."""
 
 import argparse
-import sys
 import numpy as np
 
 from iono_sense.pipeline import IonoSensePipeline
@@ -33,58 +26,24 @@ def parse_arguments() -> argparse.Namespace:
         "--mode",
         choices=["live", "sim", "benchmark"],
         default="live",
-        help=(
-            "Sistem Çalışma Modu:\n"
-            "  live      : Gerçek NOAA SWPC uzay havası + Dinamik stokastik RF (Varsayılan)\n"
-            "  sim       : Tam stokastik simülasyon (Rastgele iyonosfer ve istasyonlar)\n"
-            "  benchmark : Deterministik sabit tohumlu test (Tekrarlanabilir akademik sonuç)"
-        ),
+        help="Çalışma modu: live (NOAA SWPC + stokastik RF), sim (tam simülasyon), benchmark (sabit tohumlu)",
     )
-    parser.add_argument(
-        "--seed",
-        type=non_negative_int,
-        default=42,
-        help="Benchmark modunda kullanılacak deterministik rastgele tohum (Varsayılan: 42)",
-    )
-    parser.add_argument(
-        "--iq-file",
-        type=str,
-        default=None,
-        help="Laboratuvar/saha SDR ham I/Q kayıt dosyası (.wav veya binary cf32)",
-    )
-    parser.add_argument(
-        "--invert",
-        action="store_true",
-        default=False,
-        help=(
-            "Gerçek İrtifa Tersinimi (True-Height Inversion):\n"
-            "  FMCW sanal irtifa profilinden (h'-f) gerçek plazma irtifası h(f),\n"
-            "  foF2, hmF2, NmF2 ve alt-tepe TEC değerlerini sayısal olarak hesaplar."
-        ),
-    )
+    parser.add_argument("--seed", type=non_negative_int, default=42, help="Benchmark rastgele tohumu (Varsayılan: 42)")
+    parser.add_argument("--iq-file", type=str, default=None, help="SDR ham I/Q kayıt dosyası (.wav veya .cf32)")
+    parser.add_argument("--invert", action="store_true", default=False, help="Gerçek irtifa tersinimi h(f) hesapla")
     parser.add_argument(
         "--inversion-method",
         choices=["jackson", "tikhonov"],
         default="jackson",
-        help=(
-            "Tersinim Çözücü Algoritması:\n"
-            "  jackson  : Jackson (1969) parçalı doğrusal laminasyon matrisi (Varsayılan)\n"
-            "  tikhonov : 2. derece eğrilik regülarizasyonlu En Küçük Kareler çözücüsü"
-        ),
+        help="Tersinim çözücü algoritması: jackson veya tikhonov (Varsayılan: jackson)",
     )
-    parser.add_argument(
-        "--reg-lambda",
-        type=float,
-        default=0.001,
-        help="Tikhonov regülarizasyon katsayısı lambda (Varsayılan: 0.001)",
-    )
+    parser.add_argument("--reg-lambda", type=float, default=0.001, help="Tikhonov regülarizasyon katsayısı (0.001)")
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_arguments()
     pipeline = IonoSensePipeline(mode=args.mode, fs=12000.0, seed=args.seed, iq_file=args.iq_file)
-
     meta = pipeline.get_execution_metadata()
 
     print("=" * 96)
@@ -102,7 +61,6 @@ def main() -> None:
         print("  • İyonogram Tersinimi: DEVRE DIŞI (Sadece sanal irtifa h'(f))")
     print("=" * 96)
 
-    # 1. Plazma Katman Zayıflama Analizi
     plasma_results = pipeline.run_plasma_attenuation_analysis()
     print("\n[1] PLAZMA KATMAN ETKİLEŞİMİ VE APPLETON-HARTREE ZAYIFLAMA (ALPHA) HATA BÜTÇESİ:")
     print(
@@ -118,7 +76,6 @@ def main() -> None:
             f"{r['loss_X_db']:>8.2f} dB | {r['discrepancy_X_db']:>8.2f} dB"
         )
 
-    # 2. FT8 Mikro-Doppler ve TCXO Analizi (14.074 MHz)
     ft8_res = pipeline.run_ft8_micro_doppler_analysis(freq_mhz=14.074)
     sw = ft8_res["sw_data"]
     print(
@@ -141,7 +98,6 @@ def main() -> None:
             f"{st_m['pre_fec_ber']:.4f} ({st_m['bit_errors']}/174)"
         )
 
-    # 3. WSPR İyonosferik Sürüklenme (Drift Rate) ve İvme Analizi (14.0956 MHz)
     wspr_res = pipeline.run_wspr_drift_analysis(freq_mhz=14.0956)
     print(
         f"\n[3] 14.0956 MHz WSPR (4-FSK) ÇÖZÜMLEME VE İYONOSFERİK SÜRÜKLENME (DRIFT) ANALİZİ:\n"
@@ -160,7 +116,6 @@ def main() -> None:
             f"{wm['net_iono_drift_hz_min']:>+12.2f} Hz/dk | {wm['layer_accel_mps2']:>+13.4f} m/s²"
         )
 
-    # 4. FMCW İyonosond Taraması (Breit-Tuve Grup İndisi İntegrasyonu)
     fmcw_res = pipeline.run_fmcw_ionosonde_sweep()
     crit = fmcw_res["critical_frequencies"]
     print(
@@ -169,7 +124,6 @@ def main() -> None:
         f"foF2 = {crit['foF2_mhz']:.1f} MHz | fxF2 = {crit['fxF2_mhz']:.1f} MHz"
     )
 
-    # 4.1 Gerçek İrtifa Tersinimi (True-Height Inversion)
     inversion_res = None
     if args.invert:
         inversion_dict = pipeline.run_true_height_inversion(
@@ -187,7 +141,6 @@ def main() -> None:
             f"    • Rekonstrüksiyon RMS Hatası  : {inversion_res.residual_rms_km:.4f} km"
         )
 
-    # 5. Haselgrove 2B Işın İzleme (Ray-Tracing) Yelpazesi
     ray_fan = pipeline.run_ray_tracing_fan(freq_mhz=14.074)
     print(
         f"\n[5] 2B HASELGROVE IŞIN İZLEME (RAY-TRACING) HESABI (14.074 MHz):\n"
@@ -199,7 +152,6 @@ def main() -> None:
         dist_str = f"{ray.ground_hit_km:>6.1f} km" if ray.reflected else "  ---   "
         print(f"Δ = {ray.elevation_deg:>4.1f}°        | {status_str:<10} | {ray.apex_height_km:>7.1f} km   | {dist_str}")
 
-    # 6. Çıktıları Üretme
     pipeline.generate_all_artifacts(
         plasma_results=plasma_results,
         ft8_analysis=ft8_res,
